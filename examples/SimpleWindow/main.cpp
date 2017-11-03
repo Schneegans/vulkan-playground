@@ -8,7 +8,7 @@
 //                                                                                                //
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// #include <Illusion/Engine/Engine.hpp>
+#include <VulkanPlayground/Utils/Logger.hpp>
 
 // #include <Illusion/Graphics/Vulkan/VulkanDevice.hpp>
 // #include <Illusion/Graphics/Vulkan/VulkanInstance.hpp>
@@ -17,7 +17,7 @@
 #include <iostream>
 
 int main(int argc, char* argv[]) {
-  std::cout << "huhu" << std::endl;
+  Illusion::ILLUSION_MESSAGE << "huhu" << std::endl;
   // auto engine   = Illusion::Engine::create(argc, argv);
   // auto instance = Illusion::VulkanInstance::create("SimpleWindow");
   // auto device   = Illusion::VulkanDevice::create(instance);

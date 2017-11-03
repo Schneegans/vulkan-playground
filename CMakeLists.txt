@@ -33,7 +33,6 @@ else ()
 endif ()
 
 include(cmake/precompile_glsl.cmake)
-include(cmake/precompile_proto.cmake)
 
 # find vulkan
 find_package(Vulkan REQUIRED)
@@ -84,5 +83,5 @@ elseif (WIN32)
   add_definitions(-D_CRT_SECURE_NO_WARNINGS)
 endif ()
 
-add_subdirectory(src)
+add_subdirectory(src/VulkanPlayground)
 add_subdirectory(examples)

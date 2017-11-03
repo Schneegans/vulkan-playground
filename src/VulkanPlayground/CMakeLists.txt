@@ -26,7 +26,7 @@ add_library(${TARGET_NAME} STATIC ${FILES_SRC})
 target_link_libraries(${TARGET_NAME} ${LIBRARIES})
 
 # ------------------------------------------------------------------------------------------ install
-install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/ DESTINATION "include/VulkanPlayground"
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} DESTINATION "include"
   FILES_MATCHING PATTERN "*.hpp"
   PATTERN "internal" EXCLUDE)
 
