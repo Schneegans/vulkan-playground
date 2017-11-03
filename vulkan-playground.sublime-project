@@ -1,0 +1,52 @@
+{
+    "build_systems":
+    [
+        {
+            "cmd": ["./make.sh", "Release Build Test Install"],
+            "file_regex": "^(..[^:]*):(.*)$",
+            "name": "Release",
+            "working_dir": "${project_path}",
+            "windows":
+            {
+                "cmd": ["make.bat", "Release"]
+            }
+        },
+        {
+            "cmd": ["./make.sh", "Debug Build Test Install"],
+            "file_regex": "^(..[^:]*):(.*)$",
+            "name": "Debug",
+            "working_dir": "${project_path}",
+            "windows":
+            {
+                "cmd": ["make.bat", "Debug"]
+            }
+        },
+        {
+            "cmd": ["./make.sh", "Release Doc"],
+            "file_regex": "^(..[^:]*):(.*)$",
+            "name": "Doc",
+            "working_dir": "${project_path}"
+        }
+    ],
+    "folders":
+    [
+        {
+            "follow_symlinks": true,
+            "path": "${project_path}/..",
+            "folder_exclude_patterns": ["build", "install"]
+        }
+    ],
+    "settings":
+    {
+        "cc_include_options":
+        [
+            "-I${project_path}/../../vulkan/x86_64/include",
+            "-I${project_path}/../cef",
+            "-I${project_path}/third-party/install/linux/Release/include",
+            "-I${project_path}/build/linux/release/examples/ChatProtoFiles",
+            "-I${project_path}/build/linux/release/examples/MultiplayerPongProtoFiles",
+            "-I${project_path}/src",
+            "-std=c++11"
+        ]
+    }
+}

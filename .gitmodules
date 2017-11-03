@@ -1,0 +1,12 @@
+[submodule "third-party/spirv-cross"]
+	path = third-party/spirv-cross
+	url = https://github.com/KhronosGroup/SPIRV-Cross.git
+[submodule "third-party/glm"]
+	path = third-party/glm
+	url = https://github.com/g-truc/glm
+[submodule "third-party/glfw"]
+	path = third-party/glfw
+	url = https://github.com/glfw/glfw
+[submodule "third-party/stb"]
+	path = third-party/stb
+	url = https://github.com/nothings/stb

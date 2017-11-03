@@ -1,0 +1,8 @@
+third-party/build
+third-party/install
+
+install
+build
+
+*.spv
+*.sublime-workspace
