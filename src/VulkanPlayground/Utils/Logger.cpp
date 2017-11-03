@@ -16,8 +16,8 @@
 
 namespace Illusion {
 
-bool Logger::printFile     = true;
-bool Logger::printLine     = true;
+bool Logger::printFile     = false;
+bool Logger::printLine     = false;
 bool Logger::enableTrace   = false;
 bool Logger::enableDebug   = true;
 bool Logger::enableMessage = true;

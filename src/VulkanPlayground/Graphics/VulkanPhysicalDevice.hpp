@@ -8,24 +8,28 @@
 //                                                                                                //
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#include <VulkanPlayground/Utils/Logger.hpp>
+#ifndef ILLUSION_GRAPHICS_VULKAN_PHYSICAL_DEVICE_HPP
+#define ILLUSION_GRAPHICS_VULKAN_PHYSICAL_DEVICE_HPP
 
-#include <VulkanPlayground/Graphics/VulkanDevice.hpp>
-#include <VulkanPlayground/Graphics/VulkanInstance.hpp>
-#include <VulkanPlayground/Graphics/Window.hpp>
+// ---------------------------------------------------------------------------------------- includes
+#include "VulkanFactory.hpp"
 
-#include <iostream>
+namespace Illusion {
 
-int main(int argc, char* argv[]) {
-  auto instance = std::make_shared<Illusion::VulkanInstance>("SimpleWindow");
-  auto device   = std::make_shared<Illusion::VulkanDevice>(instance);
-  auto window   = std::make_shared<Illusion::Window>(device);
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
-  window->open();
+// -------------------------------------------------------------------------------------------------
+class VulkanPhysicalDevice : public vk::PhysicalDevice {
+ public:
+  VulkanPhysicalDevice(vk::PhysicalDevice const& device);
 
-  while(!window->shouldClose()) {
-    window->processInput();
-  }
+  VkDevicePtr createDevice(vk::DeviceCreateInfo const& info);
 
-  return 0;
+  uint32_t findMemoryType(uint32_t typeFilter, vk::MemoryPropertyFlags properties) const;
+
+  void printInfo();
+};
 }
+
+#endif // ILLUSION_GRAPHICS_VULKAN_PHYSICAL_DEVICE_HPP

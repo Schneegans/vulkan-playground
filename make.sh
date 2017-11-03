@@ -59,7 +59,3 @@ if [[ " ${ARGS[@]} " =~ "Install" ]]; then
     make install
 fi
 
-# run tests if requested
-if [[ " ${ARGS[@]} " =~ "Test" ]]; then
-    $INSTALL_DIR/bin/RunAllTests.sh
-fi

@@ -2,7 +2,7 @@
     "build_systems":
     [
         {
-            "cmd": ["./make.sh", "Release Build Test Install"],
+            "cmd": ["./make.sh", "Release Build Install"],
             "file_regex": "^(..[^:]*):(.*)$",
             "name": "Release",
             "working_dir": "${project_path}",
@@ -12,7 +12,7 @@
             }
         },
         {
-            "cmd": ["./make.sh", "Debug Build Test Install"],
+            "cmd": ["./make.sh", "Debug Build Install"],
             "file_regex": "^(..[^:]*):(.*)$",
             "name": "Debug",
             "working_dir": "${project_path}",
