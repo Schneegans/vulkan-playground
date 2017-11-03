@@ -17,15 +17,17 @@
 #include <iostream>
 
 int main(int argc, char* argv[]) {
-  auto instance = std::make_shared<Illusion::VulkanInstance>("SimpleWindow");
-  auto device   = std::make_shared<Illusion::VulkanDevice>(instance);
-  auto window   = std::make_shared<Illusion::Window>(device);
+  try {
+    auto instance = std::make_shared<Illusion::VulkanInstance>("SimpleWindow");
+    auto device   = std::make_shared<Illusion::VulkanDevice>(instance);
+    auto window   = std::make_shared<Illusion::Window>(device);
 
-  window->open();
+    window->open();
 
-  while(!window->shouldClose()) {
-    window->processInput();
-  }
+    while (!window->shouldClose()) {
+      window->processInput();
+    }
+  } catch (std::runtime_error const& e) { Illusion::ILLUSION_ERROR << e.what() << std::endl; }
 
   return 0;
 }

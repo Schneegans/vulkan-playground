@@ -12,6 +12,7 @@
 #include "VulkanDevice.hpp"
 
 #include "../Utils/Logger.hpp"
+#include "../Utils/stl_helpers.hpp"
 #include "VulkanInstance.hpp"
 #include "VulkanPhysicalDevice.hpp"
 
@@ -28,15 +29,17 @@ namespace Illusion {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 VulkanDevice::VulkanDevice(VulkanInstancePtr const& instance)
-  : mInstance(instance) {
+  : mInstance(instance)
+  , mDevice(instance->createDevice())
+  , mGraphicsQueue(mDevice->getQueue(mInstance->getGraphicsFamily(), 0))
+  , mComputeQueue(mDevice->getQueue(mInstance->getComputeFamily(), 0))
+  , mPresentQueue(mDevice->getQueue(mInstance->getPresentFamily(), 0)) {
 
-  mDevice = mInstance->createDevice();
+  vk::CommandPoolCreateInfo info;
+  info.queueFamilyIndex = mInstance->getGraphicsFamily();
+  info.flags            = vk::CommandPoolCreateFlagBits::eResetCommandBuffer;
 
-  mGraphicsQueue = mDevice->getQueue(mInstance->getGraphicsFamily(), 0);
-  mComputeQueue  = mDevice->getQueue(mInstance->getComputeFamily(), 0);
-  mPresentQueue  = mDevice->getQueue(mInstance->getPresentFamily(), 0);
-
-  createCommandPool();
+  mCommandPool = createCommandPool(info);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -46,12 +49,12 @@ VulkanDevice::~VulkanDevice() { mDevice->waitIdle(); }
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 vk::CommandBuffer VulkanDevice::beginSingleTimeCommands() const {
-  vk::CommandBufferAllocateInfo allocInfo;
-  allocInfo.level              = vk::CommandBufferLevel::ePrimary;
-  allocInfo.commandPool        = *mCommandPool;
-  allocInfo.commandBufferCount = 1;
+  vk::CommandBufferAllocateInfo info;
+  info.level              = vk::CommandBufferLevel::ePrimary;
+  info.commandPool        = *mCommandPool;
+  info.commandBufferCount = 1;
 
-  vk::CommandBuffer commandBuffer = mDevice->allocateCommandBuffers(allocInfo)[0];
+  vk::CommandBuffer commandBuffer = mDevice->allocateCommandBuffers(info)[0];
 
   vk::CommandBufferBeginInfo beginInfo;
   beginInfo.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit;
@@ -143,11 +146,44 @@ TexturePtr VulkanDevice::createTexture(
   vk::MemoryPropertyFlags properties) const {
   auto image = createImage(width, height, format, tiling, usage, properties);
 
-  auto result        = std::make_shared<Texture>();
-  result->mImage     = image->mImage;
-  result->mMemory    = image->mMemory;
-  result->mImageView = createImageView(result->mImage);
-  result->mSampler   = createSampler();
+  auto result     = std::make_shared<Texture>();
+  result->mImage  = image->mImage;
+  result->mMemory = image->mMemory;
+
+  {
+    vk::ImageViewCreateInfo info;
+    info.image                           = *image->mImage;
+    info.viewType                        = vk::ImageViewType::e2D;
+    info.format                          = vk::Format::eR8G8B8A8Unorm;
+    info.subresourceRange.aspectMask     = vk::ImageAspectFlagBits::eColor;
+    info.subresourceRange.baseMipLevel   = 0;
+    info.subresourceRange.levelCount     = 1;
+    info.subresourceRange.baseArrayLayer = 0;
+    info.subresourceRange.layerCount     = 1;
+
+    result->mImageView = createImageView(info);
+  }
+
+  {
+    vk::SamplerCreateInfo info;
+    info.magFilter               = vk::Filter::eLinear;
+    info.minFilter               = vk::Filter::eLinear;
+    info.addressModeU            = vk::SamplerAddressMode::eRepeat;
+    info.addressModeV            = vk::SamplerAddressMode::eRepeat;
+    info.addressModeW            = vk::SamplerAddressMode::eRepeat;
+    info.anisotropyEnable        = true;
+    info.maxAnisotropy           = 16;
+    info.borderColor             = vk::BorderColor::eIntOpaqueBlack;
+    info.unnormalizedCoordinates = false;
+    info.compareEnable           = false;
+    info.compareOp               = vk::CompareOp::eAlways;
+    info.mipmapMode              = vk::SamplerMipmapMode::eLinear;
+    info.mipLodBias              = 0.0f;
+    info.minLod                  = 0.0f;
+    info.maxLod                  = 0.0f;
+
+    result->mSampler = createSampler(info);
+  }
 
   return result;
 }
@@ -161,6 +197,7 @@ ImagePtr VulkanDevice::createImage(
   vk::ImageTiling         tiling,
   vk::ImageUsageFlags     usage,
   vk::MemoryPropertyFlags properties) const {
+
   vk::ImageCreateInfo imageInfo;
   imageInfo.imageType     = vk::ImageType::e2D;
   imageInfo.extent.width  = width;
@@ -177,7 +214,7 @@ ImagePtr VulkanDevice::createImage(
 
   auto result = std::make_shared<Image>();
 
-  result->mImage = VulkanFactory::createImage(imageInfo, mDevice);
+  result->mImage = createImage(imageInfo);
 
   auto requirements = mDevice->getImageMemoryRequirements(*result->mImage);
 
@@ -186,7 +223,7 @@ ImagePtr VulkanDevice::createImage(
   allocInfo.memoryTypeIndex =
     mInstance->getPhysicalDevice()->findMemoryType(requirements.memoryTypeBits, properties);
 
-  result->mMemory = VulkanFactory::allocateMemory(allocInfo, mDevice);
+  result->mMemory = allocateMemory(allocInfo);
 
   mDevice->bindImageMemory(*result->mImage, *result->mMemory, 0);
 
@@ -195,41 +232,182 @@ ImagePtr VulkanDevice::createImage(
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-VkImageViewPtr VulkanDevice::createImageView(VkImagePtr const& image) const {
-  vk::ImageViewCreateInfo info;
-  info.image                           = *image;
-  info.viewType                        = vk::ImageViewType::e2D;
-  info.format                          = vk::Format::eR8G8B8A8Unorm;
-  info.subresourceRange.aspectMask     = vk::ImageAspectFlagBits::eColor;
-  info.subresourceRange.baseMipLevel   = 0;
-  info.subresourceRange.levelCount     = 1;
-  info.subresourceRange.baseArrayLayer = 0;
-  info.subresourceRange.layerCount     = 1;
-
-  return VulkanFactory::createImageView(info, mDevice);
+VkBufferPtr VulkanDevice::createBuffer(vk::BufferCreateInfo const& info) const {
+  ILLUSION_DEBUG << "Creating buffer." << std::endl;
+  auto device{mDevice};
+  return makeVulkanPtr(device->createBuffer(info), [device](vk::Buffer* obj) {
+    ILLUSION_DEBUG << "Deleting buffer." << std::endl;
+    device->destroyBuffer(*obj);
+  });
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-VkSamplerPtr VulkanDevice::createSampler() const {
-  vk::SamplerCreateInfo info;
-  info.magFilter               = vk::Filter::eLinear;
-  info.minFilter               = vk::Filter::eLinear;
-  info.addressModeU            = vk::SamplerAddressMode::eRepeat;
-  info.addressModeV            = vk::SamplerAddressMode::eRepeat;
-  info.addressModeW            = vk::SamplerAddressMode::eRepeat;
-  info.anisotropyEnable        = true;
-  info.maxAnisotropy           = 16;
-  info.borderColor             = vk::BorderColor::eIntOpaqueBlack;
-  info.unnormalizedCoordinates = false;
-  info.compareEnable           = false;
-  info.compareOp               = vk::CompareOp::eAlways;
-  info.mipmapMode              = vk::SamplerMipmapMode::eLinear;
-  info.mipLodBias              = 0.0f;
-  info.minLod                  = 0.0f;
-  info.maxLod                  = 0.0f;
+VkCommandPoolPtr VulkanDevice::createCommandPool(vk::CommandPoolCreateInfo const& info) const {
+  ILLUSION_DEBUG << "Creating command pool." << std::endl;
+  auto device{mDevice};
+  return makeVulkanPtr(device->createCommandPool(info), [device](vk::CommandPool* obj) {
+    ILLUSION_DEBUG << "Deleting command pool." << std::endl;
+    device->destroyCommandPool(*obj);
+  });
+}
 
-  return VulkanFactory::createSampler(info, mDevice);
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+VkDescriptorSetLayoutPtr
+VulkanDevice::createDescriptorSetLayout(vk::DescriptorSetLayoutCreateInfo const& info) const {
+  ILLUSION_DEBUG << "Creating descriptor set layout." << std::endl;
+  auto device{mDevice};
+  return makeVulkanPtr(
+    device->createDescriptorSetLayout(info), [device](vk::DescriptorSetLayout* obj) {
+      ILLUSION_DEBUG << "Deleting descriptor set layout." << std::endl;
+      device->destroyDescriptorSetLayout(*obj);
+    });
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+VkDescriptorPoolPtr
+VulkanDevice::createDescriptorPool(vk::DescriptorPoolCreateInfo const& info) const {
+  ILLUSION_DEBUG << "Creating descriptor pool." << std::endl;
+  auto device{mDevice};
+  return makeVulkanPtr(device->createDescriptorPool(info), [device](vk::DescriptorPool* obj) {
+    ILLUSION_DEBUG << "Deleting descriptor pool." << std::endl;
+    device->destroyDescriptorPool(*obj);
+  });
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+VkDeviceMemoryPtr VulkanDevice::allocateMemory(vk::MemoryAllocateInfo const& info) const {
+  ILLUSION_DEBUG << "Allocating memory." << std::endl;
+  auto device{mDevice};
+  return makeVulkanPtr(device->allocateMemory(info), [device](vk::DeviceMemory* obj) {
+    ILLUSION_DEBUG << "Freeing memory." << std::endl;
+    device->freeMemory(*obj);
+  });
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+VkFramebufferPtr VulkanDevice::createFramebuffer(vk::FramebufferCreateInfo const& info) const {
+  ILLUSION_DEBUG << "Creating framebuffer." << std::endl;
+  auto device{mDevice};
+  return makeVulkanPtr(device->createFramebuffer(info), [device](vk::Framebuffer* obj) {
+    ILLUSION_DEBUG << "Deleting framebuffer." << std::endl;
+    device->destroyFramebuffer(*obj);
+  });
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+VkFencePtr VulkanDevice::createFence(vk::FenceCreateInfo const& info) const {
+  ILLUSION_DEBUG << "Creating fence." << std::endl;
+  auto device{mDevice};
+  return makeVulkanPtr(device->createFence(info), [device](vk::Fence* obj) {
+    ILLUSION_DEBUG << "Deleting fence." << std::endl;
+    device->destroyFence(*obj);
+  });
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+VkImagePtr VulkanDevice::createImage(vk::ImageCreateInfo const& info) const {
+  ILLUSION_DEBUG << "Creating image." << std::endl;
+  auto device{mDevice};
+  return makeVulkanPtr(device->createImage(info), [device](vk::Image* obj) {
+    ILLUSION_DEBUG << "Deleting image." << std::endl;
+    device->destroyImage(*obj);
+  });
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+VkImageViewPtr VulkanDevice::createImageView(vk::ImageViewCreateInfo const& info) const {
+  ILLUSION_DEBUG << "Creating image view." << std::endl;
+  auto device{mDevice};
+  return makeVulkanPtr(device->createImageView(info), [device](vk::ImageView* obj) {
+    ILLUSION_DEBUG << "Deleting image view." << std::endl;
+    device->destroyImageView(*obj);
+  });
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+VkPipelinePtr VulkanDevice::createPipeline(vk::GraphicsPipelineCreateInfo const& info) const {
+  ILLUSION_DEBUG << "Creating pipeline." << std::endl;
+  auto device{mDevice};
+  return makeVulkanPtr(device->createGraphicsPipeline(nullptr, info), [device](vk::Pipeline* obj) {
+    ILLUSION_DEBUG << "Deleting pipeline." << std::endl;
+    device->destroyPipeline(*obj);
+  });
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+VkPipelineLayoutPtr
+VulkanDevice::createPipelineLayout(vk::PipelineLayoutCreateInfo const& info) const {
+  ILLUSION_DEBUG << "Creating pipeline layout." << std::endl;
+  auto device{mDevice};
+  return makeVulkanPtr(device->createPipelineLayout(info), [device](vk::PipelineLayout* obj) {
+    ILLUSION_DEBUG << "Deleting pipeline layout." << std::endl;
+    device->destroyPipelineLayout(*obj);
+  });
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+VkRenderPassPtr VulkanDevice::createRenderPass(vk::RenderPassCreateInfo const& info) const {
+  ILLUSION_DEBUG << "Creating render pass." << std::endl;
+  auto device{mDevice};
+  return makeVulkanPtr(device->createRenderPass(info), [device](vk::RenderPass* obj) {
+    ILLUSION_DEBUG << "Deleting render pass." << std::endl;
+    device->destroyRenderPass(*obj);
+  });
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+VkSamplerPtr VulkanDevice::createSampler(vk::SamplerCreateInfo const& info) const {
+  ILLUSION_DEBUG << "Creating sampler." << std::endl;
+  auto device{mDevice};
+  return makeVulkanPtr(device->createSampler(info), [device](vk::Sampler* obj) {
+    ILLUSION_DEBUG << "Deleting sampler." << std::endl;
+    device->destroySampler(*obj);
+  });
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+VkSemaphorePtr VulkanDevice::createSemaphore(vk::SemaphoreCreateInfo const& info) const {
+  ILLUSION_DEBUG << "Creating semaphore." << std::endl;
+  auto device{mDevice};
+  return makeVulkanPtr(device->createSemaphore(info), [device](vk::Semaphore* obj) {
+    ILLUSION_DEBUG << "Deleting semaphore." << std::endl;
+    device->destroySemaphore(*obj);
+  });
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+VkShaderModulePtr VulkanDevice::createShaderModule(vk::ShaderModuleCreateInfo const& info) const {
+  ILLUSION_DEBUG << "Creating shader module." << std::endl;
+  auto device{mDevice};
+  return makeVulkanPtr(device->createShaderModule(info), [device](vk::ShaderModule* obj) {
+    ILLUSION_DEBUG << "Deleting shader module." << std::endl;
+    device->destroyShaderModule(*obj);
+  });
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+VkSwapchainKHRPtr VulkanDevice::createSwapChainKhr(vk::SwapchainCreateInfoKHR const& info) const {
+  ILLUSION_DEBUG << "Creating swap chain." << std::endl;
+  auto device{mDevice};
+  return makeVulkanPtr(device->createSwapchainKHR(info), [device](vk::SwapchainKHR* obj) {
+    ILLUSION_DEBUG << "Deleting swap chain." << std::endl;
+    device->destroySwapchainKHR(*obj);
+  });
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -239,35 +417,29 @@ BufferPtr VulkanDevice::createBuffer(
 
   auto result = std::make_shared<Buffer>();
 
-  vk::BufferCreateInfo info;
-  info.size        = size;
-  info.usage       = usage;
-  info.sharingMode = vk::SharingMode::eExclusive;
+  {
+    vk::BufferCreateInfo info;
+    info.size        = size;
+    info.usage       = usage;
+    info.sharingMode = vk::SharingMode::eExclusive;
 
-  result->mBuffer = VulkanFactory::createBuffer(info, mDevice);
+    result->mBuffer = createBuffer(info);
+  }
 
-  auto requirements = mDevice->getBufferMemoryRequirements(*result->mBuffer);
+  {
+    auto requirements = mDevice->getBufferMemoryRequirements(*result->mBuffer);
 
-  vk::MemoryAllocateInfo allocInfo;
-  allocInfo.allocationSize = requirements.size;
-  allocInfo.memoryTypeIndex =
-    mInstance->getPhysicalDevice()->findMemoryType(requirements.memoryTypeBits, properties);
+    vk::MemoryAllocateInfo info;
+    info.allocationSize = requirements.size;
+    info.memoryTypeIndex =
+      mInstance->getPhysicalDevice()->findMemoryType(requirements.memoryTypeBits, properties);
 
-  result->mMemory = VulkanFactory::allocateMemory(allocInfo, mDevice);
+    result->mMemory = allocateMemory(info);
+  }
 
   mDevice->bindBufferMemory(*result->mBuffer, *result->mMemory, 0);
 
   return result;
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-void VulkanDevice::createCommandPool() {
-  vk::CommandPoolCreateInfo info;
-  info.queueFamilyIndex = mInstance->getGraphicsFamily();
-  info.flags            = vk::CommandPoolCreateFlagBits::eResetCommandBuffer;
-
-  mCommandPool = VulkanFactory::createCommandPool(info, mDevice);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

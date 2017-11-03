@@ -12,7 +12,7 @@
 #define ILLUSION_GRAPHICS_VULKAN_PHYSICAL_DEVICE_HPP
 
 // ---------------------------------------------------------------------------------------- includes
-#include "VulkanFactory.hpp"
+#include "../fwd.hpp"
 
 namespace Illusion {
 

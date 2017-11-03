@@ -114,9 +114,9 @@ struct Identity {
 };
 
 template <typename T>
-static std::shared_ptr<T> createManagedObject(
-  T const& vkObject, typename Identity<std::function<void(T* obj)>>::type deleter) {
-  return std::shared_ptr<T>(new T(vkObject), deleter);
+static std::shared_ptr<T>
+makeVulkanPtr(T const& vkObject, typename Identity<std::function<void(T* obj)>>::type deleter) {
+  return std::shared_ptr<T>(new T{vkObject}, deleter);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

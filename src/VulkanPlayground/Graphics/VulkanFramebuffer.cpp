@@ -37,7 +37,7 @@ VulkanFramebuffer::VulkanFramebuffer(
     info.subresourceRange.baseArrayLayer = 0;
     info.subresourceRange.layerCount     = 1;
 
-    mImageView = VulkanFactory::createImageView(info, device->getDevice());
+    mImageView = device->createImageView(info);
   }
 
   {
@@ -51,7 +51,7 @@ VulkanFramebuffer::VulkanFramebuffer(
     info.height          = extend.height;
     info.layers          = 1;
 
-    mFramebuffer = VulkanFactory::createFramebuffer(info, device->getDevice());
+    mFramebuffer = device->createFramebuffer(info);
   }
 }
 

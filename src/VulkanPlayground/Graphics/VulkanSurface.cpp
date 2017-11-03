@@ -16,7 +16,7 @@
 #include "VulkanDevice.hpp"
 #include "VulkanFramebuffer.hpp"
 #include "VulkanInstance.hpp"
-#include "VulkanSwapChain.hpp"
+#include "VulkanPhysicalDevice.hpp"
 
 #include <GLFW/glfw3.h>
 
@@ -27,6 +27,60 @@
 
 namespace Illusion {
 
+namespace {
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+vk::SurfaceFormatKHR chooseSurfaceFormat(std::vector<vk::SurfaceFormatKHR> const& available) {
+  if (available.size() == 1 && available[0].format == vk::Format::eUndefined) {
+    return {vk::Format::eB8G8R8A8Unorm, vk::ColorSpaceKHR::eSrgbNonlinear};
+  }
+
+  for (const auto& format : available) {
+    if (
+      format.format == vk::Format::eB8G8R8A8Unorm &&
+      format.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear) {
+      return format;
+    }
+  }
+
+  return available[0];
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+vk::PresentModeKHR choosePresentMode(std::vector<vk::PresentModeKHR> const& available) {
+  for (auto const& mode : available) {
+    if (mode == vk::PresentModeKHR::eMailbox) { return mode; }
+  }
+
+  return vk::PresentModeKHR::eImmediate;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+vk::Extent2D chooseExtent(vk::SurfaceCapabilitiesKHR const& available) {
+  if (available.currentExtent.width != std::numeric_limits<uint32_t>::max()) {
+    return available.currentExtent;
+  } else {
+
+    // when does this happen?
+    ILLUSION_WARNING << "TODO" << std::endl;
+    vk::Extent2D actualExtent = {500, 500};
+
+    actualExtent.width = std::max(
+      available.minImageExtent.width, std::min(available.maxImageExtent.width, actualExtent.width));
+    actualExtent.height = std::max(
+      available.minImageExtent.height,
+      std::min(available.maxImageExtent.height, actualExtent.height));
+
+    return actualExtent;
+  }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 VulkanSurface::VulkanSurface(VulkanDevicePtr const& device, GLFWwindow* window)
@@ -35,11 +89,13 @@ VulkanSurface::VulkanSurface(VulkanDevicePtr const& device, GLFWwindow* window)
   mSurface = device->getInstance()->createSurface(window);
 
   createSwapChain();
+  createRenderPass();
+  createFramebuffers();
   createSemaphores();
   createCommandBuffers();
 
-  uint32_t bufferSize = sizeof(CameraUniforms);
-  mCameraUniformBuffer    = mDevice->createBuffer(
+  uint32_t bufferSize  = sizeof(CameraUniforms);
+  mCameraUniformBuffer = mDevice->createBuffer(
     bufferSize,
     vk::BufferUsageFlagBits::eUniformBuffer | vk::BufferUsageFlagBits::eTransferDst,
     vk::MemoryPropertyFlagBits::eDeviceLocal);
@@ -50,7 +106,7 @@ VulkanSurface::VulkanSurface(VulkanDevicePtr const& device, GLFWwindow* window)
 FrameInfo VulkanSurface::beginFrame(CameraUniforms const& camera) {
   uint32_t imageIndex;
   auto     result = mDevice->getDevice()->acquireNextImageKHR(
-    *(VkSwapchainKHRPtr)*mSwapChain,
+    *mSwapChain,
     std::numeric_limits<uint64_t>::max(),
     *mImageAvailableSemaphore,
     nullptr,
@@ -77,23 +133,22 @@ FrameInfo VulkanSurface::beginFrame(CameraUniforms const& camera) {
 
   // Update dynamic viewport state
   vk::Viewport viewport;
-  viewport.height   = (float)mSwapChain->getExtent().height;
-  viewport.width    = (float)mSwapChain->getExtent().width;
+  viewport.height   = (float)mExtent.height;
+  viewport.width    = (float)mExtent.width;
   viewport.minDepth = 0.0f;
   viewport.maxDepth = 1.0f;
   buffer.setViewport(0, 1, &viewport);
 
   // Update dynamic scissor state
   vk::Rect2D scissor;
-  scissor.extent.width  = mSwapChain->getExtent().width;
-  scissor.extent.height = mSwapChain->getExtent().height;
+  scissor.extent.width  = mExtent.width;
+  scissor.extent.height = mExtent.height;
   scissor.offset.x      = 0;
   scissor.offset.y      = 0;
   buffer.setScissor(0, 1, &scissor);
 
   // update camera uniforms
-  buffer.updateBuffer(
-    *mCameraUniformBuffer->mBuffer, 0, sizeof(CameraUniforms), (uint8_t*)&camera);
+  buffer.updateBuffer(*mCameraUniformBuffer->mBuffer, 0, sizeof(CameraUniforms), (uint8_t*)&camera);
 
   return {buffer, imageIndex};
 }
@@ -102,10 +157,10 @@ FrameInfo VulkanSurface::beginFrame(CameraUniforms const& camera) {
 
 void VulkanSurface::beginRenderPass(FrameInfo const& info) const {
   vk::RenderPassBeginInfo passInfo;
-  passInfo.renderPass  = *mSwapChain->getRenderPass();
-  passInfo.framebuffer = *mSwapChain->getFramebuffers()[info.mSwapChainImageIndex].mFramebuffer;
+  passInfo.renderPass        = *mRenderPass;
+  passInfo.framebuffer       = *mFramebuffers[info.mSwapChainImageIndex].mFramebuffer;
   passInfo.renderArea.offset = vk::Offset2D(0, 0);
-  passInfo.renderArea.extent = mSwapChain->getExtent();
+  passInfo.renderArea.extent = mExtent;
 
   std::array<float, 4> vals = {{0.f, 0.f, 0.f, 0.f}};
   vk::ClearValue clearColor(vals);
@@ -141,7 +196,7 @@ void VulkanSurface::endFrame(FrameInfo const& info) const {
 
   mDevice->getGraphicsQueue().submit(submitInfo, *mFences[info.mSwapChainImageIndex]);
 
-  vk::SwapchainKHR swapChains[] = {*(VkSwapchainKHRPtr)*mSwapChain};
+  vk::SwapchainKHR swapChains[] = {*mSwapChain};
 
   vk::PresentInfoKHR presentInfo;
   presentInfo.waitSemaphoreCount = 1;
@@ -164,34 +219,137 @@ void VulkanSurface::recreate() {
   mDevice->getDevice()->waitIdle();
 
   createSwapChain();
+  createRenderPass();
+  createFramebuffers();
 }
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-vk::Extent2D const& VulkanSurface::getExtent() const { return mSwapChain->getExtent(); }
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-VkRenderPassPtr const& VulkanSurface::getRenderPass() const { return mSwapChain->getRenderPass(); }
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-BufferPtr const& VulkanSurface::getCameraUniformBuffer() const { return mCameraUniformBuffer; }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void VulkanSurface::createSwapChain() {
   // delete old swap chain first
   mSwapChain.reset();
-  mSwapChain = std::make_shared<VulkanSwapChain>(mDevice, mSurface);
+
+  auto capabilities =
+    mDevice->getInstance()->getPhysicalDevice()->getSurfaceCapabilitiesKHR(*mSurface);
+  auto formats = mDevice->getInstance()->getPhysicalDevice()->getSurfaceFormatsKHR(*mSurface);
+  auto presentModes =
+    mDevice->getInstance()->getPhysicalDevice()->getSurfacePresentModesKHR(*mSurface);
+
+  mExtent                            = chooseExtent(capabilities);
+  vk::PresentModeKHR   presentMode   = choosePresentMode(presentModes);
+  vk::SurfaceFormatKHR surfaceFormat = chooseSurfaceFormat(formats);
+  mImageFormat                       = surfaceFormat.format;
+
+  mImageCount = capabilities.minImageCount + 1;
+  if (capabilities.maxImageCount > 0 && mImageCount > capabilities.maxImageCount) {
+    mImageCount = capabilities.maxImageCount;
+  }
+
+  vk::SwapchainCreateInfoKHR info;
+  info.surface          = *mSurface;
+  info.minImageCount    = mImageCount;
+  info.imageFormat      = surfaceFormat.format;
+  info.imageColorSpace  = surfaceFormat.colorSpace;
+  info.imageExtent      = mExtent;
+  info.imageArrayLayers = 1;
+  info.imageUsage       = vk::ImageUsageFlagBits::eColorAttachment;
+  info.preTransform     = capabilities.currentTransform;
+  info.compositeAlpha   = vk::CompositeAlphaFlagBitsKHR::eOpaque;
+  info.presentMode      = presentMode;
+  info.clipped          = true;
+  info.oldSwapchain     = mSwapChain ? *mSwapChain : nullptr;
+
+  uint32_t graphicsFamily = mDevice->getInstance()->getGraphicsFamily();
+  uint32_t presentFamily  = mDevice->getInstance()->getPresentFamily();
+
+  // this check should not be neccessary, but the validation layers complain
+  // when only glfwGetPhysicalDevicePresentationSupport was used to check for
+  // presentation support
+  if (!mDevice->getInstance()->getPhysicalDevice()->getSurfaceSupportKHR(
+        presentFamily, *mSurface)) {
+    ILLUSION_ERROR << "The selected queue family does not "
+                   << "support presentation!" << std::endl;
+  }
+
+  if (graphicsFamily != presentFamily) {
+    uint32_t queueFamilyIndices[] = {graphicsFamily, presentFamily};
+    info.imageSharingMode         = vk::SharingMode::eConcurrent;
+    info.queueFamilyIndexCount    = 2;
+    info.pQueueFamilyIndices      = queueFamilyIndices;
+  } else {
+    info.imageSharingMode      = vk::SharingMode::eExclusive;
+    info.queueFamilyIndexCount = 0;       // Optional
+    info.pQueueFamilyIndices   = nullptr; // Optional
+  }
+
+  mSwapChain = mDevice->createSwapChainKhr(info);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void VulkanSurface::createFramebuffers() {
+
+  // delete old frame buffers first
+  mFramebuffers.clear();
+
+  auto swapChainImages = mDevice->getDevice()->getSwapchainImagesKHR(*mSwapChain);
+
+  for (auto const& image : swapChainImages) {
+    mFramebuffers.push_back(VulkanFramebuffer(mDevice, mRenderPass, image, mExtent, mImageFormat));
+  }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void VulkanSurface::createRenderPass() {
+  // delete old render pass first
+  mRenderPass.reset();
+
+  vk::AttachmentDescription colorAttachment;
+  colorAttachment.format         = mImageFormat;
+  colorAttachment.samples        = vk::SampleCountFlagBits::e1;
+  colorAttachment.loadOp         = vk::AttachmentLoadOp::eClear;
+  colorAttachment.storeOp        = vk::AttachmentStoreOp::eStore;
+  colorAttachment.stencilLoadOp  = vk::AttachmentLoadOp::eDontCare;
+  colorAttachment.stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
+  colorAttachment.initialLayout  = vk::ImageLayout::eUndefined;
+  colorAttachment.finalLayout    = vk::ImageLayout::ePresentSrcKHR;
+
+  vk::AttachmentReference colorAttachmentRef;
+  colorAttachmentRef.attachment = 0;
+  colorAttachmentRef.layout     = vk::ImageLayout::eColorAttachmentOptimal;
+
+  vk::SubpassDescription subPass;
+  subPass.pipelineBindPoint    = vk::PipelineBindPoint::eGraphics;
+  subPass.colorAttachmentCount = 1;
+  subPass.pColorAttachments    = &colorAttachmentRef;
+
+  vk::SubpassDependency dependency;
+  dependency.srcSubpass    = VK_SUBPASS_EXTERNAL;
+  dependency.dstSubpass    = 0;
+  dependency.srcStageMask  = vk::PipelineStageFlagBits::eBottomOfPipe;
+  dependency.srcAccessMask = vk::AccessFlagBits::eMemoryRead;
+  dependency.dstStageMask  = vk::PipelineStageFlagBits::eColorAttachmentOutput;
+  dependency.dstAccessMask =
+    vk::AccessFlagBits::eColorAttachmentRead | vk::AccessFlagBits::eColorAttachmentWrite;
+
+  vk::RenderPassCreateInfo info;
+  info.attachmentCount = 1;
+  info.pAttachments    = &colorAttachment;
+  info.subpassCount    = 1;
+  info.pSubpasses      = &subPass;
+  info.dependencyCount = 1;
+  info.pDependencies   = &dependency;
+
+  mRenderPass = mDevice->createRenderPass(info);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void VulkanSurface::createSemaphores() {
   vk::SemaphoreCreateInfo info;
-  mImageAvailableSemaphore = VulkanFactory::createSemaphore(info, *mDevice);
-  mRenderFinishedSemaphore = VulkanFactory::createSemaphore(info, *mDevice);
+  mImageAvailableSemaphore = mDevice->createSemaphore(info);
+  mRenderFinishedSemaphore = mDevice->createSemaphore(info);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -200,14 +358,14 @@ void VulkanSurface::createCommandBuffers() {
   vk::CommandBufferAllocateInfo allocInfo;
   allocInfo.commandPool        = *mDevice->getCommandPool();
   allocInfo.level              = vk::CommandBufferLevel::ePrimary;
-  allocInfo.commandBufferCount = mSwapChain->getImageCount();
+  allocInfo.commandBufferCount = mImageCount;
 
   mPrimaryCommandBuffers = mDevice->getDevice()->allocateCommandBuffers(allocInfo);
 
-  for (uint32_t i = 0; i < mSwapChain->getImageCount(); ++i) {
+  for (uint32_t i = 0; i < mImageCount; ++i) {
     vk::FenceCreateInfo info;
     info.flags = vk::FenceCreateFlagBits::eSignaled;
-    mFences.push_back(VulkanFactory::createFence(info, *mDevice));
+    mFences.push_back(mDevice->createFence(info));
   }
 }
 

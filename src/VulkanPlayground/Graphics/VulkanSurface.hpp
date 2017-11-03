@@ -48,13 +48,17 @@ class VulkanSurface {
 
   void recreate();
 
-  vk::Extent2D const&    getExtent() const;
-  VkRenderPassPtr const& getRenderPass() const;
-  BufferPtr const&       getCameraUniformBuffer() const;
+  vk::Extent2D const&                   getExtent() const { return mExtent; }
+  VkRenderPassPtr const&                getRenderPass() const { return mRenderPass; }
+  uint32_t                              getImageCount() const { return mImageCount; }
+  std::vector<VulkanFramebuffer> const& getFramebuffers() const { return mFramebuffers; }
+  BufferPtr const& getCameraUniformBuffer() const { return mCameraUniformBuffer; };
 
  private:
   // ------------------------------------------------------------------------------- private methods
   void createSwapChain();
+  void createFramebuffers();
+  void createRenderPass();
   void createSemaphores();
   void createCommandBuffers();
 
@@ -68,7 +72,12 @@ class VulkanSurface {
   std::vector<vk::CommandBuffer> mPrimaryCommandBuffers;
   std::vector<VkFencePtr>        mFences;
 
-  VulkanSwapChainPtr mSwapChain;
+  VkSwapchainKHRPtr              mSwapChain;
+  VkRenderPassPtr                mRenderPass;
+  std::vector<VulkanFramebuffer> mFramebuffers;
+  uint32_t                       mImageCount;
+  vk::Format                     mImageFormat;
+  vk::Extent2D                   mExtent;
 
   BufferPtr mCameraUniformBuffer;
 };

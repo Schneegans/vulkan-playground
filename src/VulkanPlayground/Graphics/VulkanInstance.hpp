@@ -13,7 +13,6 @@
 
 // ---------------------------------------------------------------------------------------- includes
 #include "../fwd.hpp"
-#include "VulkanFactory.hpp"
 
 struct GLFWwindow;
 
@@ -30,7 +29,7 @@ class VulkanInstance {
   VulkanInstance(std::string const& appName, bool debugMode = true);
 
   VkDevicePtr     createDevice() const;
-  VkSurfaceKHRPtr createSurface(GLFWwindow* window);
+  VkSurfaceKHRPtr createSurface(GLFWwindow* window) const;
 
   VulkanPhysicalDevicePtr const& getPhysicalDevice() const { return mPhysicalDevice; }
   int                            getGraphicsFamily() const { return mGraphicsFamily; }
@@ -43,21 +42,14 @@ class VulkanInstance {
   void setupDebugCallback();
   void pickPhysicalDevice();
 
-  int chooseGraphicsQueueFamily(vk::PhysicalDevice const& physicalDevice);
-  int chooseComputeQueueFamily(vk::PhysicalDevice const& physicalDevice);
-  int choosePresentQueueFamily(vk::PhysicalDevice const& physicalDevice);
-
-  bool                     checkValidationLayerSupport();
-  std::vector<const char*> getRequiredInstanceExtensions();
-
   // ------------------------------------------------------------------------------- private members
   VkInstancePtr               mInstance;
   VkDebugReportCallbackEXTPtr mDebugCallback;
   VulkanPhysicalDevicePtr     mPhysicalDevice;
 
-  int mGraphicsFamily = -1, mComputeFamily = -1, mPresentFamily = -1;
+  int mGraphicsFamily{-1}, mComputeFamily{-1}, mPresentFamily{-1};
 
-  bool mDebugMode = false;
+  bool mDebugMode{false};
 };
 }
 
