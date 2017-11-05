@@ -35,13 +35,15 @@ int main(int argc, char* argv[]) {
 
     auto surface{window->getSurface()};
 
-    std::vector<std::string> shaderModules{"data/shaders/color.vert.spv",
-                                           "data/shaders/color.frag.spv"};
+    std::vector<std::string> shaderModules{"data/shaders/texture.vert.spv",
+                                           "data/shaders/texture.frag.spv"};
 
     auto pipeline{std::make_shared<Illusion::Graphics::Pipeline>(
       device, surface->getRenderPass(), shaderModules, 10)};
 
     pipeline->getReflection()->print();
+
+    auto texture = device->createTexture("data/textures/test.png");
 
     auto uniformBuffer = device->createBuffer(
       sizeof(Uniforms),
@@ -50,20 +52,38 @@ int main(int argc, char* argv[]) {
 
     auto descriptorSet{pipeline->allocateDescriptorSet()};
 
-    vk::DescriptorBufferInfo bufferInfo;
-    bufferInfo.buffer = *uniformBuffer->mBuffer;
-    bufferInfo.offset = 0;
-    bufferInfo.range  = sizeof(Uniforms);
+    {
+      vk::DescriptorBufferInfo bufferInfo;
+      bufferInfo.buffer = *uniformBuffer->mBuffer;
+      bufferInfo.offset = 0;
+      bufferInfo.range  = sizeof(Uniforms);
 
-    vk::WriteDescriptorSet info;
-    info.dstSet          = descriptorSet;
-    info.dstBinding      = 0;
-    info.dstArrayElement = 0;
-    info.descriptorType  = vk::DescriptorType::eUniformBuffer;
-    info.descriptorCount = 1;
-    info.pBufferInfo     = &bufferInfo;
+      vk::WriteDescriptorSet info;
+      info.dstSet          = descriptorSet;
+      info.dstBinding      = 0;
+      info.dstArrayElement = 0;
+      info.descriptorType  = vk::DescriptorType::eUniformBuffer;
+      info.descriptorCount = 1;
+      info.pBufferInfo     = &bufferInfo;
 
-    device->getVkDevice()->updateDescriptorSets(info, nullptr);
+      device->getVkDevice()->updateDescriptorSets(info, nullptr);
+    }
+    {
+      vk::DescriptorImageInfo imageInfo;
+      imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+      imageInfo.imageView   = *texture->mImageView;
+      imageInfo.sampler     = *texture->mSampler;
+
+      vk::WriteDescriptorSet info;
+      info.dstSet          = descriptorSet;
+      info.dstBinding      = 1;
+      info.dstArrayElement = 0;
+      info.descriptorType  = vk::DescriptorType::eCombinedImageSampler;
+      info.descriptorCount = 1;
+      info.pImageInfo      = &imageInfo;
+
+      device->getVkDevice()->updateDescriptorSets(info, nullptr);
+    }
 
     Uniforms uniforms;
     uniforms.mColor = glm::vec3(1, 0, 0);
@@ -81,6 +101,7 @@ int main(int argc, char* argv[]) {
 
       surface->beginRenderPass(frame);
 
+      pipeline->setPushConstant(frame, vk::ShaderStageFlagBits::eVertex, 0, glm::vec2(0.2, 0.5));
       frame.mPrimaryCommandBuffer.draw(4, 1, 0, 0);
 
       surface->endRenderPass(frame);

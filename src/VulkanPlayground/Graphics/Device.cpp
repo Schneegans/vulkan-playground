@@ -110,7 +110,7 @@ TexturePtr Device::createTexture(std::string const& fileName) const {
     vk::MemoryPropertyFlagBits::eDeviceLocal);
 
   transitionImageLayout(
-    result->mImage, vk::ImageLayout::ePreinitialized, vk::ImageLayout::eTransferDstOptimal);
+    result->mImage, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
 
   auto buffer = beginSingleTimeCommands();
 
@@ -128,6 +128,9 @@ TexturePtr Device::createTexture(std::string const& fileName) const {
     *stagingBuffer->mBuffer, *result->mImage, vk::ImageLayout::eTransferDstOptimal, info);
 
   endSingleTimeCommands(buffer);
+
+  transitionImageLayout(
+    result->mImage, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
 
   return result;
 }
@@ -457,36 +460,27 @@ void Device::transitionImageLayout(
   barrier.subresourceRange.baseArrayLayer = 0;
   barrier.subresourceRange.layerCount     = 1;
 
+  vk::PipelineStageFlags sourceStage;
+  vk::PipelineStageFlags destinationStage;
+
   if (
-    oldLayout == vk::ImageLayout::ePreinitialized &&
-    newLayout == vk::ImageLayout::eTransferSrcOptimal) {
-    barrier.srcAccessMask = vk::AccessFlagBits::eHostWrite;
-    barrier.dstAccessMask = vk::AccessFlagBits::eTransferRead;
-  } else if (
-    oldLayout == vk::ImageLayout::ePreinitialized &&
-    newLayout == vk::ImageLayout::eTransferDstOptimal) {
-    barrier.srcAccessMask = vk::AccessFlagBits::eHostWrite;
+    oldLayout == vk::ImageLayout::eUndefined && newLayout == vk::ImageLayout::eTransferDstOptimal) {
     barrier.dstAccessMask = vk::AccessFlagBits::eTransferWrite;
+    sourceStage           = vk::PipelineStageFlagBits::eTopOfPipe;
+    destinationStage      = vk::PipelineStageFlagBits::eTransfer;
   } else if (
     oldLayout == vk::ImageLayout::eTransferDstOptimal &&
     newLayout == vk::ImageLayout::eShaderReadOnlyOptimal) {
     barrier.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
     barrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
-  } else if (
-    oldLayout == vk::ImageLayout::ePreinitialized && newLayout == vk::ImageLayout::eGeneral) {
-    barrier.srcAccessMask = vk::AccessFlagBits::eHostWrite;
-    barrier.dstAccessMask = vk::AccessFlagBits::eTransferWrite;
+    sourceStage           = vk::PipelineStageFlagBits::eTransfer;
+    destinationStage      = vk::PipelineStageFlagBits::eFragmentShader;
   } else {
     ILLUSION_ERROR << "Requested an unsupported layout transition!" << std::endl;
   }
 
   commandBuffer.pipelineBarrier(
-    vk::PipelineStageFlagBits::eTopOfPipe,
-    vk::PipelineStageFlagBits::eTopOfPipe,
-    vk::DependencyFlagBits(),
-    nullptr,
-    nullptr,
-    barrier);
+    sourceStage, destinationStage, vk::DependencyFlagBits(), nullptr, nullptr, barrier);
 
   endSingleTimeCommands(commandBuffer);
 }

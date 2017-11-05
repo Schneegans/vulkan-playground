@@ -74,11 +74,13 @@ Pipeline::Pipeline(
       pools.push_back(pool);
     }
 
-    if (mReflection->getUniformBuffers().size() > 0) {
+    if (mReflection->getBuffers(ShaderReflection::BufferType::eUniform).size() > 0) {
       vk::DescriptorPoolSize pool;
       pool.type = vk::DescriptorType::eUniformBuffer;
       pool.descriptorCount =
-        static_cast<uint32_t>(mReflection->getUniformBuffers().size()) * materialCount;
+        static_cast<uint32_t>(
+          mReflection->getBuffers(ShaderReflection::BufferType::eUniform).size()) *
+        materialCount;
       pools.push_back(pool);
     }
 
@@ -149,7 +151,7 @@ Pipeline::Pipeline(
 
   // pipeline layout -------------------------------------------------------------------------------
   std::vector<vk::DescriptorSetLayoutBinding> bindings;
-  for (auto const& resource : mReflection->getUniformBuffers()) {
+  for (auto const& resource : mReflection->getBuffers(ShaderReflection::BufferType::eUniform)) {
     bindings.push_back(
       {resource.mBinding, vk::DescriptorType::eUniformBuffer, 1, resource.mActiveStages});
   }
@@ -167,7 +169,8 @@ Pipeline::Pipeline(
   vk::DescriptorSetLayout descriptorSetLayouts[] = {*mVkDescriptorSetLayout};
 
   std::vector<vk::PushConstantRange> pushConstantRanges;
-  for (auto const& pushConstant : mReflection->getPushConstantBuffers()) {
+  for (auto const& pushConstant :
+       mReflection->getBuffers(ShaderReflection::BufferType::ePushConstant)) {
     pushConstantRanges.push_back({pushConstant.mActiveStages, 0, pushConstant.mSize});
   }
 
@@ -226,7 +229,7 @@ Pipeline::~Pipeline() { mDevice->getVkDevice()->waitIdle(); }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void Pipeline::use(FrameInfo const& info, vk::DescriptorSet const& descriptorSet) {
+void Pipeline::use(FrameInfo const& info, vk::DescriptorSet const& descriptorSet) const {
   info.mPrimaryCommandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *mVkPipeline);
   info.mPrimaryCommandBuffer.bindDescriptorSets(
     vk::PipelineBindPoint::eGraphics, *mVkPipelineLayout, 0, descriptorSet, nullptr);
@@ -234,32 +237,19 @@ void Pipeline::use(FrameInfo const& info, vk::DescriptorSet const& descriptorSet
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void Pipeline::setPushConstantData(
-  FrameInfo const& info, uint32_t offset, uint32_t size, uint8_t* data) {
-  // for (auto const& pushConstant : mReflection->getPushConstantBuffers()) {
-  //   auto range = pushConstant.mMembers.find(offset);
-  //   if (range != pushConstant.mMembers.end()) {
-  //     if (range->second.mActiveStages) {
-  //       info.mPrimaryCommandBuffer.pushConstants(
-  //         *mVkPipelineLayout, range->second.mActiveStages, offset, size, data);
-  //       return;
-  //     } else {
-  //       throw std::runtime_error{"Failed to set push constant: Size does not match! (should be
-  //       "
-  //       +
-  //                                std::to_string(range->second.mSize) + " but got " +
-  //                                std::to_string(size) + ")"};
-  //     }
-  //   }
-  // }
-  // ILLUSION_WARNING << "Failed to set push constant: There is no push constant at offset " <<
-  // offset
-  //                  << "!" << std::endl;
+void Pipeline::setPushConstant(
+  FrameInfo const&     info,
+  vk::ShaderStageFlags stages,
+  uint32_t             offset,
+  uint32_t             size,
+  uint8_t*             data) const {
+
+  info.mPrimaryCommandBuffer.pushConstants(*mVkPipelineLayout, stages, offset, size, data);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-vk::DescriptorSet Pipeline::allocateDescriptorSet() {
+vk::DescriptorSet Pipeline::allocateDescriptorSet() const {
   vk::DescriptorSetLayout       descriptorSetLayouts[] = {*mVkDescriptorSetLayout};
   vk::DescriptorSetAllocateInfo info;
   info.descriptorPool     = *mVkDescriptorPool;
@@ -271,7 +261,7 @@ vk::DescriptorSet Pipeline::allocateDescriptorSet() {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void Pipeline::freeDescriptorSet(vk::DescriptorSet const& set) {
+void Pipeline::freeDescriptorSet(vk::DescriptorSet const& set) const {
   mDevice->getVkDevice()->freeDescriptorSets(*mVkDescriptorPool, set);
 }
 

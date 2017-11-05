@@ -55,15 +55,16 @@ class ShaderReflection {
     vk::ShaderStageFlags mActiveStages;
   };
 
+  enum class BufferType { ePushConstant, eUniform };
+
   // -------------------------------------------------------------------------------- public methods
   ShaderReflection(std::vector<uint32_t> const& code);
   ShaderReflection(std::vector<ShaderReflectionPtr> const& stages);
 
   void print() const;
 
-  vk::ShaderStageFlags        getStages() const { return mStages; }
-  std::vector<Buffer> const&  getPushConstantBuffers() const { return mPushConstantBuffers; }
-  std::vector<Buffer> const&  getUniformBuffers() const { return mUniformBuffers; }
+  vk::ShaderStageFlags       getStages() const { return mStages; }
+  std::vector<Buffer> const& getBuffers(BufferType type) const;
   std::vector<Sampler> const& getSamplers() const { return mSamplers; }
 
  private:

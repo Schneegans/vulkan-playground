@@ -10,12 +10,6 @@
 
 #version 450
 
-// out gl_PerVertex {
-//     vec4 gl_Position;
-// };
-
-layout(location = 0) out vec2 fragTexCoord;
-
 vec2 positions[4] = vec2[](
     vec2(-0.5, -0.5),
     vec2(0.5, -0.5),
@@ -23,20 +17,18 @@ vec2 positions[4] = vec2[](
     vec2(0.5, 0.5)
 );
 
-layout(binding = 0) uniform CameraUniforms {
-    mat3 transform;
-    float parallax;
+layout(binding = 0) uniform Uniforms {
+    vec3 color;
     float time;
-} view;
+} uniforms;
 
 layout(push_constant, std140) uniform PushConstants {
-    mat3  transform;
-    float depth;
-} model;
+    vec2 pos;
+} pushConstants;
+
+layout(location = 0) out vec2 fragTexCoord;
 
 void main() {
-    vec3 pos = view.transform * model.transform * vec3(positions[gl_VertexIndex], 1.0);
-    pos.xy *= pow(view.parallax, model.depth);
-    fragTexCoord = positions[gl_VertexIndex].xy + 0.5;
-    gl_Position = vec4(pos.xy, 0.0, 1.0);
+    fragTexCoord = positions[gl_VertexIndex] + 0.5;
+    gl_Position = vec4(positions[gl_VertexIndex] + pushConstants.pos, 0.0, 1.0);
 }

@@ -354,5 +354,14 @@ void ShaderReflection::print() const {
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+
+std::vector<ShaderReflection::Buffer> const&
+ShaderReflection::getBuffers(ShaderReflection::BufferType type) const {
+  if (type == BufferType::ePushConstant) return mPushConstantBuffers;
+
+  return mUniformBuffers;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
 }
 }

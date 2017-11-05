@@ -10,10 +10,6 @@
 
 #version 450
 
-out gl_PerVertex {
-    vec4 gl_Position;
-};
-
 vec2 positions[4] = vec2[](
     vec2(-0.5, -0.5),
     vec2(0.5, -0.5),
@@ -26,13 +22,10 @@ layout(binding = 0) uniform Uniforms {
     float time;
 } uniforms;
 
-// layout(push_constant, std140) uniform PushConstants {
-//     mat3  transform;
-//     float depth;
-// } model;
+layout(push_constant, std140) uniform PushConstants {
+    vec2 pos;
+} pushConstants;
 
 void main() {
-    // vec3 pos = view.transform * model.transform * vec3(positions[gl_VertexIndex], 1.0);
-    // pos.xy *= pow(view.parallax, model.depth);
-    gl_Position = vec4(positions[gl_VertexIndex], 0.0, 1.0);
+    gl_Position = vec4(positions[gl_VertexIndex] + pushConstants.pos, 0.0, 1.0);
 }
