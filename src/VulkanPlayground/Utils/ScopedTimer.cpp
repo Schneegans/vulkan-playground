@@ -21,25 +21,19 @@ namespace Illusion {
 
 ScopedTimer::ScopedTimer(std::string const& name)
   : mName(name)
-  , mStartTime(getNow())
-{
+  , mStartTime(getNow()) {}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+ScopedTimer::~ScopedTimer() {
+  ILLUSION_DEBUG << mName << ": " << getNow() - mStartTime << " ms " << std::endl;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-ScopedTimer::~ScopedTimer()
-{
-  double now = getNow();
-  ILLUSION_DEBUG << mName << ": " << now - mStartTime << " ms " << std::endl;
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-double ScopedTimer::getNow()
-{
-  auto time        = std::chrono::system_clock::now();
-  auto since_epoch = time.time_since_epoch();
-  return std::chrono::duration_cast<std::chrono::microseconds>(since_epoch).count() * 0.001;
+double ScopedTimer::getNow() {
+  auto time{std::chrono::system_clock::now().time_since_epoch()};
+  return std::chrono::duration_cast<std::chrono::microseconds>(time).count() * 0.001;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

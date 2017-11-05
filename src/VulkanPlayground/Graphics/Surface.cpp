@@ -9,14 +9,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // ---------------------------------------------------------------------------------------- includes
-#include "VulkanSurface.hpp"
+#include "Surface.hpp"
 
 #include "../Utils/Logger.hpp"
 #include "../Utils/ScopedTimer.hpp"
-#include "VulkanDevice.hpp"
-#include "VulkanFramebuffer.hpp"
-#include "VulkanInstance.hpp"
-#include "VulkanPhysicalDevice.hpp"
+#include "Device.hpp"
+#include "Framebuffer.hpp"
+#include "Instance.hpp"
+#include "PhysicalDevice.hpp"
 
 #include <GLFW/glfw3.h>
 
@@ -26,7 +26,7 @@
 #include <thread>
 
 namespace Illusion {
-
+namespace Graphics {
 namespace {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -83,10 +83,10 @@ vk::Extent2D chooseExtent(vk::SurfaceCapabilitiesKHR const& available) {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-VulkanSurface::VulkanSurface(VulkanDevicePtr const& device, GLFWwindow* window)
+Surface::Surface(DevicePtr const& device, GLFWwindow* window)
   : mDevice(device) {
 
-  mSurface = device->getInstance()->createSurface(window);
+  mSurface = device->getInstance()->createVkSurface(window);
 
   createSwapChain();
   createRenderPass();
@@ -103,9 +103,9 @@ VulkanSurface::VulkanSurface(VulkanDevicePtr const& device, GLFWwindow* window)
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-FrameInfo VulkanSurface::beginFrame(CameraUniforms const& camera) {
+FrameInfo Surface::beginFrame(CameraUniforms const& camera) {
   uint32_t imageIndex;
-  auto     result = mDevice->getDevice()->acquireNextImageKHR(
+  auto     result = mDevice->getVkDevice()->acquireNextImageKHR(
     *mSwapChain,
     std::numeric_limits<uint64_t>::max(),
     *mImageAvailableSemaphore,
@@ -123,10 +123,10 @@ FrameInfo VulkanSurface::beginFrame(CameraUniforms const& camera) {
 
   vk::CommandBufferBeginInfo beginInfo;
   beginInfo.flags = vk::CommandBufferUsageFlagBits::eSimultaneousUse;
-  mDevice->getDevice()->waitForFences(*mFences[imageIndex], true, ~0);
+  mDevice->getVkDevice()->waitForFences(*mFences[imageIndex], true, ~0);
 
   vk::CommandBuffer buffer = mPrimaryCommandBuffers[imageIndex];
-  mDevice->getDevice()->resetFences(*mFences[imageIndex]);
+  mDevice->getVkDevice()->resetFences(*mFences[imageIndex]);
 
   buffer.reset(vk::CommandBufferResetFlags());
   buffer.begin(beginInfo);
@@ -155,7 +155,7 @@ FrameInfo VulkanSurface::beginFrame(CameraUniforms const& camera) {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void VulkanSurface::beginRenderPass(FrameInfo const& info) const {
+void Surface::beginRenderPass(FrameInfo const& info) const {
   vk::RenderPassBeginInfo passInfo;
   passInfo.renderPass        = *mRenderPass;
   passInfo.framebuffer       = *mFramebuffers[info.mSwapChainImageIndex].mFramebuffer;
@@ -172,13 +172,13 @@ void VulkanSurface::beginRenderPass(FrameInfo const& info) const {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void VulkanSurface::endRenderPass(FrameInfo const& info) const {
+void Surface::endRenderPass(FrameInfo const& info) const {
   info.mPrimaryCommandBuffer.endRenderPass();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void VulkanSurface::endFrame(FrameInfo const& info) const {
+void Surface::endFrame(FrameInfo const& info) const {
   info.mPrimaryCommandBuffer.end();
 
   vk::PipelineStageFlags waitStages[]       = {vk::PipelineStageFlagBits::eColorAttachmentOutput};
@@ -194,7 +194,7 @@ void VulkanSurface::endFrame(FrameInfo const& info) const {
   submitInfo.signalSemaphoreCount = 1;
   submitInfo.pSignalSemaphores    = signalSemaphores;
 
-  mDevice->getGraphicsQueue().submit(submitInfo, *mFences[info.mSwapChainImageIndex]);
+  mDevice->getVkGraphicsQueue().submit(submitInfo, *mFences[info.mSwapChainImageIndex]);
 
   vk::SwapchainKHR swapChains[] = {*mSwapChain};
 
@@ -205,7 +205,7 @@ void VulkanSurface::endFrame(FrameInfo const& info) const {
   presentInfo.pSwapchains        = swapChains;
   presentInfo.pImageIndices      = &info.mSwapChainImageIndex;
 
-  auto result = mDevice->getPresentQueue().presentKHR(presentInfo);
+  auto result = mDevice->getVkPresentQueue().presentKHR(presentInfo);
   if (result == vk::Result::eErrorOutOfDateKHR || result == vk::Result::eSuboptimalKHR) {
     ILLUSION_ERROR << "out of date 3!" << std::endl;
   } else if (result != vk::Result::eSuccess) {
@@ -215,8 +215,8 @@ void VulkanSurface::endFrame(FrameInfo const& info) const {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void VulkanSurface::recreate() {
-  mDevice->getDevice()->waitIdle();
+void Surface::recreate() {
+  mDevice->getVkDevice()->waitIdle();
 
   createSwapChain();
   createRenderPass();
@@ -225,7 +225,7 @@ void VulkanSurface::recreate() {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void VulkanSurface::createSwapChain() {
+void Surface::createSwapChain() {
   // delete old swap chain first
   mSwapChain.reset();
 
@@ -282,26 +282,26 @@ void VulkanSurface::createSwapChain() {
     info.pQueueFamilyIndices   = nullptr; // Optional
   }
 
-  mSwapChain = mDevice->createSwapChainKhr(info);
+  mSwapChain = mDevice->createVkSwapChainKhr(info);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void VulkanSurface::createFramebuffers() {
+void Surface::createFramebuffers() {
 
   // delete old frame buffers first
   mFramebuffers.clear();
 
-  auto swapChainImages = mDevice->getDevice()->getSwapchainImagesKHR(*mSwapChain);
+  auto swapChainImages = mDevice->getVkDevice()->getSwapchainImagesKHR(*mSwapChain);
 
   for (auto const& image : swapChainImages) {
-    mFramebuffers.push_back(VulkanFramebuffer(mDevice, mRenderPass, image, mExtent, mImageFormat));
+    mFramebuffers.push_back(Framebuffer(mDevice, mRenderPass, image, mExtent, mImageFormat));
   }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void VulkanSurface::createRenderPass() {
+void Surface::createRenderPass() {
   // delete old render pass first
   mRenderPass.reset();
 
@@ -341,33 +341,34 @@ void VulkanSurface::createRenderPass() {
   info.dependencyCount = 1;
   info.pDependencies   = &dependency;
 
-  mRenderPass = mDevice->createRenderPass(info);
+  mRenderPass = mDevice->createVkRenderPass(info);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void VulkanSurface::createSemaphores() {
+void Surface::createSemaphores() {
   vk::SemaphoreCreateInfo info;
-  mImageAvailableSemaphore = mDevice->createSemaphore(info);
-  mRenderFinishedSemaphore = mDevice->createSemaphore(info);
+  mImageAvailableSemaphore = mDevice->createVkSemaphore(info);
+  mRenderFinishedSemaphore = mDevice->createVkSemaphore(info);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void VulkanSurface::createCommandBuffers() {
+void Surface::createCommandBuffers() {
   vk::CommandBufferAllocateInfo allocInfo;
-  allocInfo.commandPool        = *mDevice->getCommandPool();
+  allocInfo.commandPool        = *mDevice->getVkCommandPool();
   allocInfo.level              = vk::CommandBufferLevel::ePrimary;
   allocInfo.commandBufferCount = mImageCount;
 
-  mPrimaryCommandBuffers = mDevice->getDevice()->allocateCommandBuffers(allocInfo);
+  mPrimaryCommandBuffers = mDevice->getVkDevice()->allocateCommandBuffers(allocInfo);
 
   for (uint32_t i = 0; i < mImageCount; ++i) {
     vk::FenceCreateInfo info;
     info.flags = vk::FenceCreateFlagBits::eSignaled;
-    mFences.push_back(mDevice->createFence(info));
+    mFences.push_back(mDevice->createVkFence(info));
   }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+}
 }

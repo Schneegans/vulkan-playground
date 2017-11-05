@@ -12,8 +12,8 @@
 #include "Window.hpp"
 
 #include "../Utils/Logger.hpp"
-#include "VulkanFramebuffer.hpp"
-#include "VulkanSurface.hpp"
+#include "Framebuffer.hpp"
+#include "Surface.hpp"
 
 #include <vulkan/vulkan.hpp>
 
@@ -21,10 +21,10 @@
 #include <iostream>
 
 namespace Illusion {
-
+namespace Graphics {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-Window::Window(VulkanDevicePtr const& device)
+Window::Window(DevicePtr const& device)
   : mDevice(device) {}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -36,12 +36,12 @@ Window::~Window() {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void Window::open() {
+void Window::open(bool fullscreen) {
   if (!mWindow) {
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
-    if (false) {
+    if (fullscreen) {
       auto mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
       mWindow   = glfwCreateWindow(
         mode->width, mode->height, "VulkanPlayground", glfwGetPrimaryMonitor(), nullptr);
@@ -49,7 +49,7 @@ void Window::open() {
       mWindow = glfwCreateWindow(800, 600, "VulkanPlayground", nullptr, nullptr);
     }
 
-    mSurface = std::make_shared<VulkanSurface>(mDevice, mWindow);
+    mSurface = std::make_shared<Surface>(mDevice, mWindow);
 
     glfwSetWindowUserPointer(mWindow, this);
 
@@ -113,11 +113,12 @@ void Window::processInput() {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-VulkanDevicePtr const& Window::getDevice() const { return mDevice; }
+DevicePtr const& Window::getDevice() const { return mDevice; }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-VulkanSurfacePtr const& Window::getSurface() const { return mSurface; }
+SurfacePtr const& Window::getSurface() const { return mSurface; }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+}
 }

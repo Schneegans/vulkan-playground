@@ -8,18 +8,18 @@
 //                                                                                                //
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#ifndef ILLUSION_SHADER_REFLECTION_HPP
-#define ILLUSION_SHADER_REFLECTION_HPP
+#ifndef ILLUSION_GRAPHICS_SHADER_REFLECTION_HPP
+#define ILLUSION_GRAPHICS_SHADER_REFLECTION_HPP
 
 // ---------------------------------------------------------------------------------------- includes
 #include "../Utils/Logger.hpp"
 #include "../fwd.hpp"
-#include "VulkanDevice.hpp"
 
 #include <map>
 #include <unordered_map>
 
 namespace Illusion {
+namespace Graphics {
 
 struct FrameInfo;
 
@@ -31,32 +31,29 @@ class ShaderReflection {
 
  public:
   // -------------------------------------------------------------------------------- public classes
-  enum class Stage : uint32_t { Unknown = 0, Vertex = 1 << 0, Fragment = 1 << 1 };
-
   struct BufferRange {
-    std::string mName;
-    uint32_t    mSize         = 0;
-    uint32_t    mActiveStages = 0;
+    std::string          mName;
+    std::string          mType;
+    uint32_t             mSize{0};
+    uint32_t             mOffset{0};
+    vk::ShaderStageFlags mActiveStages;
   };
 
   struct Buffer {
-    std::string mName;
-    uint32_t    mSize         = 0;
-    uint32_t    mBinding      = 0;
-    uint32_t    mActiveStages = 0;
+    std::string          mName;
+    std::string          mType;
+    uint32_t             mSize{0};
+    uint32_t             mBinding{0};
+    vk::ShaderStageFlags mActiveStages;
 
-    std::map<uint32_t, BufferRange> mMembers;
+    std::vector<BufferRange> mRanges;
   };
 
   struct Sampler {
-    std::string mName;
-    uint32_t    mBinding      = 0;
-    uint32_t    mActiveStages = 0;
+    std::string          mName;
+    uint32_t             mBinding{0};
+    vk::ShaderStageFlags mActiveStages;
   };
-
-  // -------------------------------------------------------------------------------- static methods
-  static vk::ShaderStageFlags toVk(uint32_t stages);
-  static vk::ShaderStageFlagBits toVk(Stage stage);
 
   // -------------------------------------------------------------------------------- public methods
   ShaderReflection(std::string const& name, std::vector<uint32_t> const& code);
@@ -64,25 +61,22 @@ class ShaderReflection {
 
   void print() const;
 
-  std::string const& getName() const;
-  uint32_t           getStages() const;
-  std::map<Stage, std::vector<uint32_t>> const& getCode() const;
-
-  std::vector<Buffer> const&  getPushConstantBuffers() const;
-  std::vector<Buffer> const&  getUniformBuffers() const;
-  std::vector<Sampler> const& getSamplers() const;
+  std::string const&          getName() const { return mName; }
+  vk::ShaderStageFlags        getStages() const { return mStages; }
+  std::vector<Buffer> const&  getPushConstantBuffers() const { return mPushConstantBuffers; }
+  std::vector<Buffer> const&  getUniformBuffers() const { return mUniformBuffers; }
+  std::vector<Sampler> const& getSamplers() const { return mSamplers; }
 
  private:
   // ------------------------------------------------------------------------------- private members
-  std::string mName;
-  uint32_t    mStages = static_cast<uint32_t>(Stage::Unknown);
+  std::string          mName;
+  vk::ShaderStageFlags mStages;
 
   std::vector<Buffer>  mPushConstantBuffers;
   std::vector<Buffer>  mUniformBuffers;
   std::vector<Sampler> mSamplers;
-
-  std::map<Stage, std::vector<uint32_t>> mCode;
 };
 }
+}
 
-#endif // ILLUSION_SHADER_REFLECTION_HPP
+#endif // ILLUSION_GRAPHICS_SHADER_REFLECTION_HPP

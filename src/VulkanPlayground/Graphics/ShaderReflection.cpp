@@ -11,64 +11,110 @@
 // ---------------------------------------------------------------------------------------- includes
 #include "ShaderReflection.hpp"
 
+#include <iomanip>
 #include <vulkan/spirv_glsl.hpp>
 
 namespace Illusion {
-
+namespace Graphics {
 namespace {
-std::string convertToString(uint32_t stages) {
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+std::string toString(vk::ShaderStageFlags stages) {
   std::string result;
 
-  auto addStage = [&](std::string const& name, ShaderReflection::Stage stage) {
-    if ((stages & static_cast<uint32_t>(stage)) > 0) {
+  auto addStage = [&](std::string const& name, vk::ShaderStageFlags stage) {
+    if ((VkShaderStageFlags)(stages & stage) > 0) {
       if (result.size() > 0) { result += " | "; }
       result += name;
     }
   };
 
-  addStage("Vertex", ShaderReflection::Stage::Vertex);
-  addStage("Fragment", ShaderReflection::Stage::Fragment);
+  addStage("Compute", vk::ShaderStageFlagBits::eCompute);
+  addStage("Fragment", vk::ShaderStageFlagBits::eFragment);
+  addStage("Geometry", vk::ShaderStageFlagBits::eGeometry);
+  addStage("TessellationControl", vk::ShaderStageFlagBits::eTessellationControl);
+  addStage("TessellationEvaluation", vk::ShaderStageFlagBits::eTessellationEvaluation);
+  addStage("Vertex", vk::ShaderStageFlagBits::eVertex);
 
   if (result.size() == 0) { result = "None"; }
 
   return result;
 }
-}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-vk::ShaderStageFlags ShaderReflection::toVk(uint32_t stages) {
-  vk::ShaderStageFlags result;
+std::string toString(spirv_cross::SPIRType type) {
+  std::string result;
 
-  if ((stages & static_cast<uint32_t>(ShaderReflection::Stage::Vertex)) > 0) {
-    result |= vk::ShaderStageFlagBits::eVertex;
+  switch (type.basetype) {
+  case spirv_cross::SPIRType::Unknown:
+    result = "unknown";
+    break;
+  case spirv_cross::SPIRType::Void:
+    result = "void";
+    break;
+  case spirv_cross::SPIRType::Boolean:
+    result = "boolean";
+    break;
+  case spirv_cross::SPIRType::Char:
+    result = "char";
+    break;
+  case spirv_cross::SPIRType::Int:
+    result = "int";
+    break;
+  case spirv_cross::SPIRType::UInt:
+    result = "uint";
+    break;
+  case spirv_cross::SPIRType::Int64:
+    result = "int64";
+    break;
+  case spirv_cross::SPIRType::UInt64:
+    result = "uint64";
+    break;
+  case spirv_cross::SPIRType::AtomicCounter:
+    result = "atomiccounter";
+    break;
+  case spirv_cross::SPIRType::Float:
+    result = "float";
+    break;
+  case spirv_cross::SPIRType::Double:
+    result = "double";
+    break;
+  case spirv_cross::SPIRType::Struct:
+    result = "struct";
+    break;
+  case spirv_cross::SPIRType::Image:
+    result = "image";
+    break;
+  case spirv_cross::SPIRType::SampledImage:
+    result = "sampledimage";
+    break;
+  case spirv_cross::SPIRType::Sampler:
+    result = "sampler";
+    break;
   }
 
-  if ((stages & static_cast<uint32_t>(ShaderReflection::Stage::Fragment)) > 0) {
-    result |= vk::ShaderStageFlagBits::eFragment;
+  if (type.vecsize > 1) {
+    if (type.columns == 1)
+      result = "vec" + std::to_string(type.vecsize);
+    else if (type.vecsize == type.columns)
+      result = "mat" + std::to_string(type.vecsize);
+    else
+      result = "mat" + std::to_string(type.columns) + "x" + std::to_string(type.vecsize);
   }
 
   return result;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-
-vk::ShaderStageFlagBits ShaderReflection::toVk(ShaderReflection::Stage stage) {
-  switch (stage) {
-  case ShaderReflection::Stage::Vertex:
-    return vk::ShaderStageFlagBits::eVertex;
-  case ShaderReflection::Stage::Fragment:
-    return vk::ShaderStageFlagBits::eFragment;
-  default:
-    return vk::ShaderStageFlagBits();
-  }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 ShaderReflection::ShaderReflection(std::string const& name, std::vector<uint32_t> const& code)
   : mName(name) {
-  spirv_cross::Compiler        parser(code);
+  spirv_cross::Compiler        parser{code};
   spirv_cross::ShaderResources resources       = parser.get_shader_resources();
   auto                         activeVariables = parser.get_active_interface_variables();
 
@@ -77,46 +123,56 @@ ShaderReflection::ShaderReflection(std::string const& name, std::vector<uint32_t
 
   switch (stage) {
   case spv::ExecutionModelVertex:
-    mStages              = static_cast<uint32_t>(Stage::Vertex);
-    mCode[Stage::Vertex] = code;
+    mStages = vk::ShaderStageFlagBits::eVertex;
     break;
   case spv::ExecutionModelFragment:
-    mStages                = static_cast<uint32_t>(Stage::Fragment);
-    mCode[Stage::Fragment] = code;
+    mStages = vk::ShaderStageFlagBits::eFragment;
     break;
   default:
     ILLUSION_WARNING << "Shader stage of module " << mName << " is not supported!" << std::endl;
     break;
   }
 
+  // collect buffers -------------------------------------------------------------------------------
   auto collectBuffers =
     [&](std::vector<spirv_cross::Resource> const& src, std::vector<Buffer>& dst) {
       for (auto const& resource : src) {
 
-        auto type = parser.get_type(resource.base_type_id);
-
         Buffer buffer;
-        buffer.mName    = resource.name;
+        auto   type     = parser.get_type(resource.type_id);
+        buffer.mName    = parser.get_name(resource.id);
+        buffer.mType    = parser.get_name(resource.base_type_id);
         buffer.mBinding = parser.get_decoration(resource.id, spv::DecorationBinding);
-        buffer.mSize    = static_cast<uint32_t>(parser.get_declared_struct_size(type));
-
+        buffer.mSize    = parser.get_declared_struct_size(type);
         if (activeVariables.find(resource.id) != activeVariables.end()) {
           buffer.mActiveStages = mStages;
         }
 
-        if (buffer.mName == "model")
-          Illusion::ILLUSION_MESSAGE << parser.get_active_buffer_ranges(resource.id).size() << std::endl;
+        auto activeMembers{parser.get_active_buffer_ranges(resource.id)};
 
-        for (auto const& activeRange : parser.get_active_buffer_ranges(resource.id)) {
-          buffer.mMembers[static_cast<uint32_t>(activeRange.offset)].mSize =
-            static_cast<uint32_t>(activeRange.range);
-          buffer.mMembers[static_cast<uint32_t>(activeRange.offset)].mActiveStages = mStages;
+        for (size_t i{0}; i < type.member_types.size(); ++i) {
+          BufferRange range;
+          auto        memberType = parser.get_type(type.member_types[i]);
+          range.mName            = parser.get_member_name(resource.base_type_id, i);
+          range.mType            = toString(memberType);
+          range.mOffset          = parser.type_struct_member_offset(type, i);
+          range.mSize            = parser.get_declared_struct_member_size(type, i);
+
+          for (auto const& activeMember : activeMembers) {
+            if (activeMember.index == i) { range.mActiveStages = mStages; }
+          }
+
+          buffer.mRanges.push_back(range);
         }
 
         dst.push_back(buffer);
       }
     };
 
+  collectBuffers(resources.push_constant_buffers, mPushConstantBuffers);
+  collectBuffers(resources.uniform_buffers, mUniformBuffers);
+
+  // collect image samplers ------------------------------------------------------------------------
   auto collectSamplers =
     [&](std::vector<spirv_cross::Resource> const& src, std::vector<Sampler>& dst) {
       for (auto const& resource : src) {
@@ -132,13 +188,6 @@ ShaderReflection::ShaderReflection(std::string const& name, std::vector<uint32_t
       }
     };
 
-  // collect push constant ranges ------------------------------------------------------------------
-  collectBuffers(resources.push_constant_buffers, mPushConstantBuffers);
-
-  // collect uniform buffers -----------------------------------------------------------------------
-  collectBuffers(resources.uniform_buffers, mUniformBuffers);
-
-  // collect image samplers
   collectSamplers(resources.sampled_images, mSamplers);
 
   // warn if not supported features are used -------------------------------------------------------
@@ -164,45 +213,81 @@ ShaderReflection::ShaderReflection(std::vector<ShaderReflectionPtr> const& stage
   for (auto const& stage : stages) {
 
     // check that we do not have such a stage already - this should not happen!
-    if ((mStages & stage->mStages) > 0) {
-      ILLUSION_WARNING << convertToString(stage->mStages) << " shader stage is already part of "
+    if ((VkShaderStageFlags)(mStages & stage->mStages) > 0) {
+      ILLUSION_WARNING << toString(stage->mStages) << " shader stage is already part of "
                        << "the ShaderReflection!" << std::endl;
-    }
-
-    // concatenate code
-    for (auto const& code : stage->mCode) {
-      mCode[code.first] = code.second;
     }
 
     // concatenate name and stage
     if (mName.size() > 0) { mName += " | "; }
-
     mName += stage->mName;
+
     mStages |= stage->mStages;
 
     // combine buffers
-    auto mergeBuffers = [this](std::vector<Buffer> const& src, std::vector<Buffer>& dst) {
-      for (auto const& srcBuffer : src) {
+    auto mergeBuffers = [this](
+      std::vector<Buffer> const& srcBuffers, std::vector<Buffer>& dstBuffers) {
+
+      for (auto const& srcBuffer : srcBuffers) {
         bool merged = false;
-        for (auto& dstBuffer : dst) {
+
+        for (auto& dstBuffer : dstBuffers) {
+
+          // there is already a buffer at this binding point
           if (srcBuffer.mBinding == dstBuffer.mBinding) {
 
-            dstBuffer.mActiveStages |= srcBuffer.mActiveStages;
-
-            for (auto const& src : srcBuffer.mMembers) {
-              auto dst = dstBuffer.mMembers.find(src.first);
-              if (dst == dstBuffer.mMembers.end()) {
-                dstBuffer.mMembers.insert(src);
-              } else {
-                if (src.second.mSize == dst->second.mSize) {
-                  dst->second.mActiveStages |= src.second.mActiveStages;
-                } else {
-                  ILLUSION_WARNING << "Failed to merge shader stages " << mName << "! Offsets and "
-                                   << "sizes for buffer at binding " << srcBuffer.mBinding
-                                   << " do not match." << std::endl;
-                }
-              }
+            // check if they have the same type
+            if (srcBuffer.mType != dstBuffer.mType) {
+              throw std::runtime_error{"Failed to merge reflection information for shader stages " +
+                                       mName + ": Types of Buffers at binding point " +
+                                       std::to_string(dstBuffer.mBinding) + " do not match!"};
             }
+
+            // check if they have the same size
+            if (srcBuffer.mSize != dstBuffer.mSize) {
+              throw std::runtime_error{"Failed to merge reflection information for shader stages " +
+                                       mName + ": Sizes of Buffers " + dstBuffer.mType +
+                                       " at binding point " + std::to_string(dstBuffer.mBinding) +
+                                       " do not match!"};
+            }
+
+            // check if they have the same ranges
+            if (srcBuffer.mRanges.size() != dstBuffer.mRanges.size()) {
+              throw std::runtime_error{"Failed to merge reflection information for shader stages " +
+                                       mName + ": Ranges of Buffer " + dstBuffer.mType +
+                                       " at binding point " + std::to_string(dstBuffer.mBinding) +
+                                       " do not match!"};
+            }
+
+            for (size_t i{0}; i < srcBuffer.mRanges.size(); ++i) {
+              // check if they have the same type
+              if (srcBuffer.mRanges[i].mType != dstBuffer.mRanges[i].mType) {
+                throw std::runtime_error{
+                  "Failed to merge reflection information for shader stages " + mName +
+                  ": Types of Range #" + std::to_string(i) + " of Buffer " + dstBuffer.mType +
+                  " at binding point " + std::to_string(dstBuffer.mBinding) + " do not match!"};
+              }
+
+              // check if they have the same size
+              if (srcBuffer.mRanges[i].mSize != dstBuffer.mRanges[i].mSize) {
+                throw std::runtime_error{
+                  "Failed to merge reflection information for shader stages " + mName +
+                  ": Sizes of Range #" + std::to_string(i) + " of Buffer " + dstBuffer.mType +
+                  " at binding point " + std::to_string(dstBuffer.mBinding) + " do not match!"};
+              }
+
+              // check if they have the same offsets
+              if (srcBuffer.mRanges[i].mOffset != dstBuffer.mRanges[i].mOffset) {
+                throw std::runtime_error{
+                  "Failed to merge reflection information for shader stages " + mName +
+                  ": Offsets of Range #" + std::to_string(i) + " of Buffer " + dstBuffer.mType +
+                  " at binding point " + std::to_string(dstBuffer.mBinding) + " do not match!"};
+              }
+
+              dstBuffer.mRanges[i].mActiveStages |= srcBuffer.mRanges[i].mActiveStages;
+            }
+
+            dstBuffer.mActiveStages |= srcBuffer.mActiveStages;
 
             merged = true;
             break;
@@ -210,7 +295,7 @@ ShaderReflection::ShaderReflection(std::vector<ShaderReflectionPtr> const& stage
         }
 
         // this buffer is not part of the combined module yet
-        if (!merged) dst.push_back(srcBuffer);
+        if (!merged) dstBuffers.push_back(srcBuffer);
       }
     };
 
@@ -243,24 +328,25 @@ void ShaderReflection::print() const {
   ILLUSION_MESSAGE << Logger::PRINT_BOLD << "Reflection information for shader " << mName
                    << Logger::PRINT_RESET << std::endl;
 
-  ILLUSION_MESSAGE << " Stage: " << convertToString(mStages) << std::endl;
+  ILLUSION_MESSAGE << " Stage(s): " << toString(mStages) << std::endl;
 
   auto printBuffers = [](std::string const& name, std::vector<Buffer> const& buffers) {
     if (buffers.size() > 0) {
+      ILLUSION_MESSAGE << std::endl;
       ILLUSION_MESSAGE << " " << name << ":" << std::endl;
       for (auto const& buffer : buffers) {
-        ILLUSION_MESSAGE << " - Name: " << buffer.mName << std::endl;
-        ILLUSION_MESSAGE << "   Size: " << buffer.mSize << std::endl;
-        ILLUSION_MESSAGE << "   Binding: " << buffer.mBinding << std::endl;
-        ILLUSION_MESSAGE << "   Active in: " << convertToString(buffer.mActiveStages) << std::endl;
-        ILLUSION_MESSAGE << "   Members: " << std::endl;
+        ILLUSION_MESSAGE << Logger::PRINT_BOLD << " - " << buffer.mType << " " << buffer.mName
+                         << Logger::PRINT_RESET << " (Stages: " << toString(buffer.mActiveStages)
+                         << ")" << std::endl;
+        ILLUSION_MESSAGE << "   Size:     " << buffer.mSize << std::endl;
+        ILLUSION_MESSAGE << "   Binding:  " << buffer.mBinding << std::endl;
 
-        for (auto member : buffer.mMembers) {
-          ILLUSION_MESSAGE << "   - Name: " << member.second.mName << std::endl;
-          ILLUSION_MESSAGE << "     Offset: " << member.first << std::endl;
-          ILLUSION_MESSAGE << "     Size: " << member.second.mSize << std::endl;
-          ILLUSION_MESSAGE << "     Active in: " << convertToString(member.second.mActiveStages)
-                           << std::endl;
+        for (auto range : buffer.mRanges) {
+          ILLUSION_MESSAGE << Logger::PRINT_BOLD << "   - " << range.mType << " " << range.mName
+                           << Logger::PRINT_RESET << " (Stages: " << toString(range.mActiveStages)
+                           << ")" << std::endl;
+          ILLUSION_MESSAGE << "     Size:   " << range.mSize << std::endl;
+          ILLUSION_MESSAGE << "     Offset: " << range.mOffset << std::endl;
         }
       }
     }
@@ -268,11 +354,13 @@ void ShaderReflection::print() const {
 
   auto printSamplers = [](std::string const& name, std::vector<Sampler> const& samplers) {
     if (samplers.size() > 0) {
+      ILLUSION_MESSAGE << std::endl;
       ILLUSION_MESSAGE << " " << name << ":" << std::endl;
       for (auto const& sampler : samplers) {
-        ILLUSION_MESSAGE << " - Name: " << sampler.mName << std::endl;
+        ILLUSION_MESSAGE << Logger::PRINT_BOLD << " - Name: " << sampler.mName
+                         << Logger::PRINT_RESET << " (Stages: " << toString(sampler.mActiveStages)
+                         << ")" << std::endl;
         ILLUSION_MESSAGE << "   Binding: " << sampler.mBinding << std::endl;
-        ILLUSION_MESSAGE << "   Active in: " << convertToString(sampler.mActiveStages) << std::endl;
       }
     }
   };
@@ -283,37 +371,5 @@ void ShaderReflection::print() const {
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-
-std::string const& ShaderReflection::getName() const { return mName; }
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-uint32_t ShaderReflection::getStages() const { return mStages; }
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-std::map<ShaderReflection::Stage, std::vector<uint32_t>> const&
-ShaderReflection::getCode() const {
-  return mCode;
 }
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-std::vector<ShaderReflection::Buffer> const& ShaderReflection::getPushConstantBuffers() const {
-  return mPushConstantBuffers;
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-std::vector<ShaderReflection::Buffer> const& ShaderReflection::getUniformBuffers() const {
-  return mUniformBuffers;
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-std::vector<ShaderReflection::Sampler> const& ShaderReflection::getSamplers() const {
-  return mSamplers;
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
 }

@@ -8,13 +8,14 @@
 //                                                                                                //
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#ifndef ILLUSION_VULKAN_DEVICE_HPP
-#define ILLUSION_VULKAN_DEVICE_HPP
+#ifndef ILLUSION_GRAPHICS_DEVICE_HPP
+#define ILLUSION_GRAPHICS_DEVICE_HPP
 
 // ---------------------------------------------------------------------------------------- includes
 #include "../fwd.hpp"
 
 namespace Illusion {
+namespace Graphics {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -37,12 +38,12 @@ struct Buffer {
 };
 
 // -------------------------------------------------------------------------------------------------
-class VulkanDevice {
+class Device {
 
  public:
   // -------------------------------------------------------------------------------- public methods
-  VulkanDevice(VulkanInstancePtr const& instance);
-  ~VulkanDevice();
+  Device(InstancePtr const& instance);
+  ~Device();
 
   vk::CommandBuffer beginSingleTimeCommands() const;
   void endSingleTimeCommands(vk::CommandBuffer commandBuffer) const;
@@ -64,48 +65,50 @@ class VulkanDevice {
     vk::ImageUsageFlags     usage,
     vk::MemoryPropertyFlags properties) const;
 
-  VkBufferPtr         createBuffer(vk::BufferCreateInfo const&) const;
-  VkCommandPoolPtr    createCommandPool(vk::CommandPoolCreateInfo const&) const;
-  VkDescriptorPoolPtr createDescriptorPool(vk::DescriptorPoolCreateInfo const&) const;
-  VkDescriptorSetLayoutPtr
-                      createDescriptorSetLayout(vk::DescriptorSetLayoutCreateInfo const&) const;
-  VkDeviceMemoryPtr   allocateMemory(vk::MemoryAllocateInfo const&) const;
-  VkFencePtr          createFence(vk::FenceCreateInfo const&) const;
-  VkFramebufferPtr    createFramebuffer(vk::FramebufferCreateInfo const&) const;
-  VkImagePtr          createImage(vk::ImageCreateInfo const&) const;
-  VkImageViewPtr      createImageView(vk::ImageViewCreateInfo const&) const;
-  VkPipelineLayoutPtr createPipelineLayout(vk::PipelineLayoutCreateInfo const&) const;
-  VkPipelinePtr       createPipeline(vk::GraphicsPipelineCreateInfo const&) const;
-  VkRenderPassPtr     createRenderPass(vk::RenderPassCreateInfo const&) const;
-  VkSamplerPtr        createSampler(vk::SamplerCreateInfo const&) const;
-  VkSemaphorePtr      createSemaphore(vk::SemaphoreCreateInfo const&) const;
-  VkShaderModulePtr   createShaderModule(vk::ShaderModuleCreateInfo const&) const;
-  VkSwapchainKHRPtr   createSwapChainKhr(vk::SwapchainCreateInfoKHR const&) const;
-
   BufferPtr createBuffer(
     vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties) const;
+
+  VkBufferPtr         createVkBuffer(vk::BufferCreateInfo const&) const;
+  VkCommandPoolPtr    createVkCommandPool(vk::CommandPoolCreateInfo const&) const;
+  VkDescriptorPoolPtr createVkDescriptorPool(vk::DescriptorPoolCreateInfo const&) const;
+  VkDescriptorSetLayoutPtr
+                      createVkDescriptorSetLayout(vk::DescriptorSetLayoutCreateInfo const&) const;
+  VkDeviceMemoryPtr   allocateMemory(vk::MemoryAllocateInfo const&) const;
+  VkFencePtr          createVkFence(vk::FenceCreateInfo const&) const;
+  VkFramebufferPtr    createVkFramebuffer(vk::FramebufferCreateInfo const&) const;
+  VkImagePtr          createVkImage(vk::ImageCreateInfo const&) const;
+  VkImageViewPtr      createVkImageView(vk::ImageViewCreateInfo const&) const;
+  VkPipelineLayoutPtr createVkPipelineLayout(vk::PipelineLayoutCreateInfo const&) const;
+  VkPipelinePtr       createVkPipeline(vk::GraphicsPipelineCreateInfo const&) const;
+  VkRenderPassPtr     createVkRenderPass(vk::RenderPassCreateInfo const&) const;
+  VkSamplerPtr        createVkSampler(vk::SamplerCreateInfo const&) const;
+  VkSemaphorePtr      createVkSemaphore(vk::SemaphoreCreateInfo const&) const;
+  VkShaderModulePtr   createVkShaderModule(vk::ShaderModuleCreateInfo const&) const;
+  VkSwapchainKHRPtr   createVkSwapChainKhr(vk::SwapchainCreateInfoKHR const&) const;
 
   void transitionImageLayout(
     VkImagePtr& image, vk::ImageLayout oldLayout, vk::ImageLayout newLayout) const;
 
-  VulkanInstancePtr const& getInstance() const { return mInstance; }
-  VkDevicePtr const&       getDevice() const { return mDevice; }
-  VkCommandPoolPtr const&  getCommandPool() const { return mCommandPool; }
-  vk::Queue const&         getGraphicsQueue() const { return mGraphicsQueue; }
-  vk::Queue const&         getComputeQueue() const { return mComputeQueue; }
-  vk::Queue const&         getPresentQueue() const { return mPresentQueue; }
+  InstancePtr const& getInstance() const { return mInstance; }
+
+  VkDevicePtr const&      getVkDevice() const { return mVkDevice; }
+  VkCommandPoolPtr const& getVkCommandPool() const { return mVkCommandPool; }
+  vk::Queue const&        getVkGraphicsQueue() const { return mVkGraphicsQueue; }
+  vk::Queue const&        getVkComputeQueue() const { return mVkComputeQueue; }
+  vk::Queue const&        getVkPresentQueue() const { return mVkPresentQueue; }
 
  private:
   // ------------------------------------------------------------------------------- private methods
   void copyImage(VkImagePtr& src, VkImagePtr& dst, uint32_t width, uint32_t height) const;
 
   // ------------------------------------------------------------------------------- private members
-  VulkanInstancePtr mInstance;
-  VkDevicePtr       mDevice;
-  vk::Queue         mGraphicsQueue, mComputeQueue, mPresentQueue;
+  InstancePtr mInstance;
 
-  VkCommandPoolPtr mCommandPool;
+  VkDevicePtr      mVkDevice;
+  vk::Queue        mVkGraphicsQueue, mVkComputeQueue, mVkPresentQueue;
+  VkCommandPoolPtr mVkCommandPool;
 };
 }
+}
 
-#endif // ILLUSION_VULKAN_DEVICE_HPP
+#endif // ILLUSION_GRAPHICS_DEVICE_HPP

@@ -12,9 +12,7 @@
 #define ILLUSION_UTILS_FILE_HPP
 
 // ---------------------------------------------------------------------------------------- includes
-#include "../Math/math.hpp"
 #include "../Utils/Logger.hpp"
-#include "../Utils/platform.hpp"
 
 #include <fstream>
 #include <sstream>
@@ -28,7 +26,7 @@
 namespace Illusion {
 
 template <typename T>
-class ILLUSION_DLL File {
+class File {
 
  public:
   // ------------------------------------------------------------------------- contruction interface
@@ -36,38 +34,28 @@ class ILLUSION_DLL File {
   File()
     : mFileName("")
     , mContent()
-    , mIsLoaded(false)
-  {
-  }
+    , mIsLoaded(false) {}
 
   // This constructs a File for a given name.
   File(std::string const& fileName)
     : mFileName(fileName)
     , mContent()
-    , mIsLoaded(false)
-  {
-  }
+    , mIsLoaded(false) {}
 
   // -------------------------------------------------------------------------------- public methods
   // Returns if the given file is valid.
-  bool isValid() const
-  {
+  bool isValid() const {
     std::ifstream file(mFileName.c_str());
 
-    if (file.fail()) {
-      return false;
-    }
+    if (file.fail()) { return false; }
 
     file.close();
     return true;
   }
 
   // Returns the given file's content.
-  std::vector<T> const& getContent() const
-  {
-    if (mIsLoaded) {
-      return mContent;
-    }
+  std::vector<T> const& getContent() const {
+    if (mIsLoaded) { return mContent; }
 
     std::ifstream ifs(mFileName, std::ifstream::in | std::ios::binary);
     if (!ifs) {
@@ -88,15 +76,13 @@ class ILLUSION_DLL File {
   }
 
   // Sets the given file's content.
-  void setContent(std::vector<T> const& content)
-  {
+  void setContent(std::vector<T> const& content) {
     mContent  = content;
     mIsLoaded = true;
   }
 
   // Saves the file
-  bool save() const
-  {
+  bool save() const {
     if (!mIsLoaded) {
       ILLUSION_WARNING << "Unable to save file \"" << mFileName << "\"! No content has been set."
                        << std::endl;
@@ -116,8 +102,7 @@ class ILLUSION_DLL File {
   }
 
   // Deletes the file from the file system
-  void remove()
-  {
+  void remove() {
     std::remove(mFileName.c_str());
     mContent.clear();
     mIsLoaded = false;

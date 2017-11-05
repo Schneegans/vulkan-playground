@@ -8,30 +8,30 @@
 //                                                                                                //
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+#ifndef ILLUSION_GRAPHICS_PHYSICAL_DEVICE_HPP
+#define ILLUSION_GRAPHICS_PHYSICAL_DEVICE_HPP
+
 // ---------------------------------------------------------------------------------------- includes
-#include "stl_helpers.hpp"
+#include "../fwd.hpp"
 
 namespace Illusion {
+namespace Graphics {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
-std::vector<std::string> splitString(std::string const& s, char delim)
-{
-  std::vector<std::string> elems;
+// -------------------------------------------------------------------------------------------------
+class PhysicalDevice : public vk::PhysicalDevice {
+ public:
+  PhysicalDevice(vk::PhysicalDevice const& device);
 
-  std::stringstream ss(s);
-  std::string       item;
+  VkDevicePtr createVkDevice(vk::DeviceCreateInfo const& info);
 
-  while (std::getline(ss, item, delim)) {
-    elems.push_back(item);
-  }
+  uint32_t findMemoryType(uint32_t typeFilter, vk::MemoryPropertyFlags properties) const;
 
-  return elems;
+  void printInfo();
+};
+}
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-bool stringContains(std::string const& s, char c) { return s.find(c) != std::string::npos; }
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-}
+#endif // ILLUSION_GRAPHICS_PHYSICAL_DEVICE_HPP

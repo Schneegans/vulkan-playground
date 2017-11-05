@@ -9,12 +9,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // ---------------------------------------------------------------------------------------- includes
-#include "VulkanDevice.hpp"
+#include "Device.hpp"
 
 #include "../Utils/Logger.hpp"
-#include "../Utils/stl_helpers.hpp"
-#include "VulkanInstance.hpp"
-#include "VulkanPhysicalDevice.hpp"
+#include "Instance.hpp"
+#include "PhysicalDevice.hpp"
+#include "VulkanPtr.hpp"
 
 #include <GLFW/glfw3.h>
 
@@ -25,36 +25,36 @@
 #include <set>
 
 namespace Illusion {
-
+namespace Graphics {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-VulkanDevice::VulkanDevice(VulkanInstancePtr const& instance)
+Device::Device(InstancePtr const& instance)
   : mInstance(instance)
-  , mDevice(instance->createDevice())
-  , mGraphicsQueue(mDevice->getQueue(mInstance->getGraphicsFamily(), 0))
-  , mComputeQueue(mDevice->getQueue(mInstance->getComputeFamily(), 0))
-  , mPresentQueue(mDevice->getQueue(mInstance->getPresentFamily(), 0)) {
+  , mVkDevice(instance->createVkDevice())
+  , mVkGraphicsQueue(mVkDevice->getQueue(mInstance->getGraphicsFamily(), 0))
+  , mVkComputeQueue(mVkDevice->getQueue(mInstance->getComputeFamily(), 0))
+  , mVkPresentQueue(mVkDevice->getQueue(mInstance->getPresentFamily(), 0)) {
 
   vk::CommandPoolCreateInfo info;
   info.queueFamilyIndex = mInstance->getGraphicsFamily();
   info.flags            = vk::CommandPoolCreateFlagBits::eResetCommandBuffer;
 
-  mCommandPool = createCommandPool(info);
+  mVkCommandPool = createVkCommandPool(info);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-VulkanDevice::~VulkanDevice() { mDevice->waitIdle(); }
+Device::~Device() { mVkDevice->waitIdle(); }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-vk::CommandBuffer VulkanDevice::beginSingleTimeCommands() const {
+vk::CommandBuffer Device::beginSingleTimeCommands() const {
   vk::CommandBufferAllocateInfo info;
   info.level              = vk::CommandBufferLevel::ePrimary;
-  info.commandPool        = *mCommandPool;
+  info.commandPool        = *mVkCommandPool;
   info.commandBufferCount = 1;
 
-  vk::CommandBuffer commandBuffer = mDevice->allocateCommandBuffers(info)[0];
+  vk::CommandBuffer commandBuffer{mVkDevice->allocateCommandBuffers(info)[0]};
 
   vk::CommandBufferBeginInfo beginInfo;
   beginInfo.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit;
@@ -66,22 +66,22 @@ vk::CommandBuffer VulkanDevice::beginSingleTimeCommands() const {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void VulkanDevice::endSingleTimeCommands(vk::CommandBuffer commandBuffer) const {
+void Device::endSingleTimeCommands(vk::CommandBuffer commandBuffer) const {
   commandBuffer.end();
 
-  vk::SubmitInfo submitInfo;
-  submitInfo.commandBufferCount = 1;
-  submitInfo.pCommandBuffers    = &commandBuffer;
+  vk::SubmitInfo info;
+  info.commandBufferCount = 1;
+  info.pCommandBuffers    = &commandBuffer;
 
-  mGraphicsQueue.submit(submitInfo, nullptr);
-  mGraphicsQueue.waitIdle();
+  mVkGraphicsQueue.submit(info, nullptr);
+  mVkGraphicsQueue.waitIdle();
 
-  mDevice->freeCommandBuffers(*mCommandPool, commandBuffer);
+  mVkDevice->freeCommandBuffers(*mVkCommandPool, commandBuffer);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-TexturePtr VulkanDevice::createTexture(std::string const& fileName) const {
+TexturePtr Device::createTexture(std::string const& fileName) const {
 
   int      texWidth, texHeight, texChannels;
   stbi_uc* pixels =
@@ -95,9 +95,9 @@ TexturePtr VulkanDevice::createTexture(std::string const& fileName) const {
     vk::BufferUsageFlagBits::eTransferSrc,
     vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
 
-  void* data = mDevice->mapMemory(*stagingBuffer->mMemory, 0, imageSize);
+  void* data = mVkDevice->mapMemory(*stagingBuffer->mMemory, 0, imageSize);
   std::memcpy(data, pixels, (size_t)imageSize);
-  mDevice->unmapMemory(*stagingBuffer->mMemory);
+  mVkDevice->unmapMemory(*stagingBuffer->mMemory);
 
   stbi_image_free(pixels);
 
@@ -114,21 +114,18 @@ TexturePtr VulkanDevice::createTexture(std::string const& fileName) const {
 
   auto buffer = beginSingleTimeCommands();
 
-  vk::BufferImageCopy bufferCopyRegion;
-  bufferCopyRegion.imageSubresource.aspectMask     = vk::ImageAspectFlagBits::eColor;
-  bufferCopyRegion.imageSubresource.mipLevel       = 0;
-  bufferCopyRegion.imageSubresource.baseArrayLayer = 0;
-  bufferCopyRegion.imageSubresource.layerCount     = 1;
-  bufferCopyRegion.imageExtent.width               = texWidth;
-  bufferCopyRegion.imageExtent.height              = texHeight;
-  bufferCopyRegion.imageExtent.depth               = 1;
-  bufferCopyRegion.imageOffset.z                   = 0;
+  vk::BufferImageCopy info;
+  info.imageSubresource.aspectMask     = vk::ImageAspectFlagBits::eColor;
+  info.imageSubresource.mipLevel       = 0;
+  info.imageSubresource.baseArrayLayer = 0;
+  info.imageSubresource.layerCount     = 1;
+  info.imageExtent.width               = texWidth;
+  info.imageExtent.height              = texHeight;
+  info.imageExtent.depth               = 1;
+  info.imageOffset.z                   = 0;
 
   buffer.copyBufferToImage(
-    *stagingBuffer->mBuffer,
-    *result->mImage,
-    vk::ImageLayout::eTransferDstOptimal,
-    bufferCopyRegion);
+    *stagingBuffer->mBuffer, *result->mImage, vk::ImageLayout::eTransferDstOptimal, info);
 
   endSingleTimeCommands(buffer);
 
@@ -137,7 +134,7 @@ TexturePtr VulkanDevice::createTexture(std::string const& fileName) const {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-TexturePtr VulkanDevice::createTexture(
+TexturePtr Device::createTexture(
   uint32_t                width,
   uint32_t                height,
   vk::Format              format,
@@ -161,7 +158,7 @@ TexturePtr VulkanDevice::createTexture(
     info.subresourceRange.baseArrayLayer = 0;
     info.subresourceRange.layerCount     = 1;
 
-    result->mImageView = createImageView(info);
+    result->mImageView = createVkImageView(info);
   }
 
   {
@@ -182,7 +179,7 @@ TexturePtr VulkanDevice::createTexture(
     info.minLod                  = 0.0f;
     info.maxLod                  = 0.0f;
 
-    result->mSampler = createSampler(info);
+    result->mSampler = createVkSampler(info);
   }
 
   return result;
@@ -190,7 +187,7 @@ TexturePtr VulkanDevice::createTexture(
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-ImagePtr VulkanDevice::createImage(
+ImagePtr Device::createImage(
   uint32_t                width,
   uint32_t                height,
   vk::Format              format,
@@ -198,25 +195,25 @@ ImagePtr VulkanDevice::createImage(
   vk::ImageUsageFlags     usage,
   vk::MemoryPropertyFlags properties) const {
 
-  vk::ImageCreateInfo imageInfo;
-  imageInfo.imageType     = vk::ImageType::e2D;
-  imageInfo.extent.width  = width;
-  imageInfo.extent.height = height;
-  imageInfo.extent.depth  = 1;
-  imageInfo.mipLevels     = 1;
-  imageInfo.arrayLayers   = 1;
-  imageInfo.format        = format;
-  imageInfo.tiling        = tiling;
-  imageInfo.initialLayout = vk::ImageLayout::ePreinitialized;
-  imageInfo.usage         = usage;
-  imageInfo.sharingMode   = vk::SharingMode::eExclusive;
-  imageInfo.samples       = vk::SampleCountFlagBits::e1;
+  vk::ImageCreateInfo info;
+  info.imageType     = vk::ImageType::e2D;
+  info.extent.width  = width;
+  info.extent.height = height;
+  info.extent.depth  = 1;
+  info.mipLevels     = 1;
+  info.arrayLayers   = 1;
+  info.format        = format;
+  info.tiling        = tiling;
+  info.initialLayout = vk::ImageLayout::ePreinitialized;
+  info.usage         = usage;
+  info.sharingMode   = vk::SharingMode::eExclusive;
+  info.samples       = vk::SampleCountFlagBits::e1;
 
   auto result = std::make_shared<Image>();
 
-  result->mImage = createImage(imageInfo);
+  result->mImage = createVkImage(info);
 
-  auto requirements = mDevice->getImageMemoryRequirements(*result->mImage);
+  auto requirements = mVkDevice->getImageMemoryRequirements(*result->mImage);
 
   vk::MemoryAllocateInfo allocInfo;
   allocInfo.allocationSize = requirements.size;
@@ -225,16 +222,16 @@ ImagePtr VulkanDevice::createImage(
 
   result->mMemory = allocateMemory(allocInfo);
 
-  mDevice->bindImageMemory(*result->mImage, *result->mMemory, 0);
+  mVkDevice->bindImageMemory(*result->mImage, *result->mMemory, 0);
 
   return result;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-VkBufferPtr VulkanDevice::createBuffer(vk::BufferCreateInfo const& info) const {
+VkBufferPtr Device::createVkBuffer(vk::BufferCreateInfo const& info) const {
   ILLUSION_DEBUG << "Creating buffer." << std::endl;
-  auto device{mDevice};
+  auto device{mVkDevice};
   return makeVulkanPtr(device->createBuffer(info), [device](vk::Buffer* obj) {
     ILLUSION_DEBUG << "Deleting buffer." << std::endl;
     device->destroyBuffer(*obj);
@@ -243,9 +240,9 @@ VkBufferPtr VulkanDevice::createBuffer(vk::BufferCreateInfo const& info) const {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-VkCommandPoolPtr VulkanDevice::createCommandPool(vk::CommandPoolCreateInfo const& info) const {
+VkCommandPoolPtr Device::createVkCommandPool(vk::CommandPoolCreateInfo const& info) const {
   ILLUSION_DEBUG << "Creating command pool." << std::endl;
-  auto device{mDevice};
+  auto device{mVkDevice};
   return makeVulkanPtr(device->createCommandPool(info), [device](vk::CommandPool* obj) {
     ILLUSION_DEBUG << "Deleting command pool." << std::endl;
     device->destroyCommandPool(*obj);
@@ -255,9 +252,9 @@ VkCommandPoolPtr VulkanDevice::createCommandPool(vk::CommandPoolCreateInfo const
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 VkDescriptorSetLayoutPtr
-VulkanDevice::createDescriptorSetLayout(vk::DescriptorSetLayoutCreateInfo const& info) const {
+Device::createVkDescriptorSetLayout(vk::DescriptorSetLayoutCreateInfo const& info) const {
   ILLUSION_DEBUG << "Creating descriptor set layout." << std::endl;
-  auto device{mDevice};
+  auto device{mVkDevice};
   return makeVulkanPtr(
     device->createDescriptorSetLayout(info), [device](vk::DescriptorSetLayout* obj) {
       ILLUSION_DEBUG << "Deleting descriptor set layout." << std::endl;
@@ -267,10 +264,9 @@ VulkanDevice::createDescriptorSetLayout(vk::DescriptorSetLayoutCreateInfo const&
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-VkDescriptorPoolPtr
-VulkanDevice::createDescriptorPool(vk::DescriptorPoolCreateInfo const& info) const {
+VkDescriptorPoolPtr Device::createVkDescriptorPool(vk::DescriptorPoolCreateInfo const& info) const {
   ILLUSION_DEBUG << "Creating descriptor pool." << std::endl;
-  auto device{mDevice};
+  auto device{mVkDevice};
   return makeVulkanPtr(device->createDescriptorPool(info), [device](vk::DescriptorPool* obj) {
     ILLUSION_DEBUG << "Deleting descriptor pool." << std::endl;
     device->destroyDescriptorPool(*obj);
@@ -279,9 +275,9 @@ VulkanDevice::createDescriptorPool(vk::DescriptorPoolCreateInfo const& info) con
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-VkDeviceMemoryPtr VulkanDevice::allocateMemory(vk::MemoryAllocateInfo const& info) const {
+VkDeviceMemoryPtr Device::allocateMemory(vk::MemoryAllocateInfo const& info) const {
   ILLUSION_DEBUG << "Allocating memory." << std::endl;
-  auto device{mDevice};
+  auto device{mVkDevice};
   return makeVulkanPtr(device->allocateMemory(info), [device](vk::DeviceMemory* obj) {
     ILLUSION_DEBUG << "Freeing memory." << std::endl;
     device->freeMemory(*obj);
@@ -290,9 +286,9 @@ VkDeviceMemoryPtr VulkanDevice::allocateMemory(vk::MemoryAllocateInfo const& inf
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-VkFramebufferPtr VulkanDevice::createFramebuffer(vk::FramebufferCreateInfo const& info) const {
+VkFramebufferPtr Device::createVkFramebuffer(vk::FramebufferCreateInfo const& info) const {
   ILLUSION_DEBUG << "Creating framebuffer." << std::endl;
-  auto device{mDevice};
+  auto device{mVkDevice};
   return makeVulkanPtr(device->createFramebuffer(info), [device](vk::Framebuffer* obj) {
     ILLUSION_DEBUG << "Deleting framebuffer." << std::endl;
     device->destroyFramebuffer(*obj);
@@ -301,9 +297,9 @@ VkFramebufferPtr VulkanDevice::createFramebuffer(vk::FramebufferCreateInfo const
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-VkFencePtr VulkanDevice::createFence(vk::FenceCreateInfo const& info) const {
+VkFencePtr Device::createVkFence(vk::FenceCreateInfo const& info) const {
   ILLUSION_DEBUG << "Creating fence." << std::endl;
-  auto device{mDevice};
+  auto device{mVkDevice};
   return makeVulkanPtr(device->createFence(info), [device](vk::Fence* obj) {
     ILLUSION_DEBUG << "Deleting fence." << std::endl;
     device->destroyFence(*obj);
@@ -312,9 +308,9 @@ VkFencePtr VulkanDevice::createFence(vk::FenceCreateInfo const& info) const {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-VkImagePtr VulkanDevice::createImage(vk::ImageCreateInfo const& info) const {
+VkImagePtr Device::createVkImage(vk::ImageCreateInfo const& info) const {
   ILLUSION_DEBUG << "Creating image." << std::endl;
-  auto device{mDevice};
+  auto device{mVkDevice};
   return makeVulkanPtr(device->createImage(info), [device](vk::Image* obj) {
     ILLUSION_DEBUG << "Deleting image." << std::endl;
     device->destroyImage(*obj);
@@ -323,9 +319,9 @@ VkImagePtr VulkanDevice::createImage(vk::ImageCreateInfo const& info) const {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-VkImageViewPtr VulkanDevice::createImageView(vk::ImageViewCreateInfo const& info) const {
+VkImageViewPtr Device::createVkImageView(vk::ImageViewCreateInfo const& info) const {
   ILLUSION_DEBUG << "Creating image view." << std::endl;
-  auto device{mDevice};
+  auto device{mVkDevice};
   return makeVulkanPtr(device->createImageView(info), [device](vk::ImageView* obj) {
     ILLUSION_DEBUG << "Deleting image view." << std::endl;
     device->destroyImageView(*obj);
@@ -334,9 +330,9 @@ VkImageViewPtr VulkanDevice::createImageView(vk::ImageViewCreateInfo const& info
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-VkPipelinePtr VulkanDevice::createPipeline(vk::GraphicsPipelineCreateInfo const& info) const {
+VkPipelinePtr Device::createVkPipeline(vk::GraphicsPipelineCreateInfo const& info) const {
   ILLUSION_DEBUG << "Creating pipeline." << std::endl;
-  auto device{mDevice};
+  auto device{mVkDevice};
   return makeVulkanPtr(device->createGraphicsPipeline(nullptr, info), [device](vk::Pipeline* obj) {
     ILLUSION_DEBUG << "Deleting pipeline." << std::endl;
     device->destroyPipeline(*obj);
@@ -345,10 +341,9 @@ VkPipelinePtr VulkanDevice::createPipeline(vk::GraphicsPipelineCreateInfo const&
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-VkPipelineLayoutPtr
-VulkanDevice::createPipelineLayout(vk::PipelineLayoutCreateInfo const& info) const {
+VkPipelineLayoutPtr Device::createVkPipelineLayout(vk::PipelineLayoutCreateInfo const& info) const {
   ILLUSION_DEBUG << "Creating pipeline layout." << std::endl;
-  auto device{mDevice};
+  auto device{mVkDevice};
   return makeVulkanPtr(device->createPipelineLayout(info), [device](vk::PipelineLayout* obj) {
     ILLUSION_DEBUG << "Deleting pipeline layout." << std::endl;
     device->destroyPipelineLayout(*obj);
@@ -357,9 +352,9 @@ VulkanDevice::createPipelineLayout(vk::PipelineLayoutCreateInfo const& info) con
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-VkRenderPassPtr VulkanDevice::createRenderPass(vk::RenderPassCreateInfo const& info) const {
+VkRenderPassPtr Device::createVkRenderPass(vk::RenderPassCreateInfo const& info) const {
   ILLUSION_DEBUG << "Creating render pass." << std::endl;
-  auto device{mDevice};
+  auto device{mVkDevice};
   return makeVulkanPtr(device->createRenderPass(info), [device](vk::RenderPass* obj) {
     ILLUSION_DEBUG << "Deleting render pass." << std::endl;
     device->destroyRenderPass(*obj);
@@ -368,9 +363,9 @@ VkRenderPassPtr VulkanDevice::createRenderPass(vk::RenderPassCreateInfo const& i
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-VkSamplerPtr VulkanDevice::createSampler(vk::SamplerCreateInfo const& info) const {
+VkSamplerPtr Device::createVkSampler(vk::SamplerCreateInfo const& info) const {
   ILLUSION_DEBUG << "Creating sampler." << std::endl;
-  auto device{mDevice};
+  auto device{mVkDevice};
   return makeVulkanPtr(device->createSampler(info), [device](vk::Sampler* obj) {
     ILLUSION_DEBUG << "Deleting sampler." << std::endl;
     device->destroySampler(*obj);
@@ -379,9 +374,9 @@ VkSamplerPtr VulkanDevice::createSampler(vk::SamplerCreateInfo const& info) cons
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-VkSemaphorePtr VulkanDevice::createSemaphore(vk::SemaphoreCreateInfo const& info) const {
+VkSemaphorePtr Device::createVkSemaphore(vk::SemaphoreCreateInfo const& info) const {
   ILLUSION_DEBUG << "Creating semaphore." << std::endl;
-  auto device{mDevice};
+  auto device{mVkDevice};
   return makeVulkanPtr(device->createSemaphore(info), [device](vk::Semaphore* obj) {
     ILLUSION_DEBUG << "Deleting semaphore." << std::endl;
     device->destroySemaphore(*obj);
@@ -390,9 +385,9 @@ VkSemaphorePtr VulkanDevice::createSemaphore(vk::SemaphoreCreateInfo const& info
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-VkShaderModulePtr VulkanDevice::createShaderModule(vk::ShaderModuleCreateInfo const& info) const {
+VkShaderModulePtr Device::createVkShaderModule(vk::ShaderModuleCreateInfo const& info) const {
   ILLUSION_DEBUG << "Creating shader module." << std::endl;
-  auto device{mDevice};
+  auto device{mVkDevice};
   return makeVulkanPtr(device->createShaderModule(info), [device](vk::ShaderModule* obj) {
     ILLUSION_DEBUG << "Deleting shader module." << std::endl;
     device->destroyShaderModule(*obj);
@@ -401,9 +396,9 @@ VkShaderModulePtr VulkanDevice::createShaderModule(vk::ShaderModuleCreateInfo co
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-VkSwapchainKHRPtr VulkanDevice::createSwapChainKhr(vk::SwapchainCreateInfoKHR const& info) const {
+VkSwapchainKHRPtr Device::createVkSwapChainKhr(vk::SwapchainCreateInfoKHR const& info) const {
   ILLUSION_DEBUG << "Creating swap chain." << std::endl;
-  auto device{mDevice};
+  auto device{mVkDevice};
   return makeVulkanPtr(device->createSwapchainKHR(info), [device](vk::SwapchainKHR* obj) {
     ILLUSION_DEBUG << "Deleting swap chain." << std::endl;
     device->destroySwapchainKHR(*obj);
@@ -412,7 +407,7 @@ VkSwapchainKHRPtr VulkanDevice::createSwapChainKhr(vk::SwapchainCreateInfoKHR co
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-BufferPtr VulkanDevice::createBuffer(
+BufferPtr Device::createBuffer(
   vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties) const {
 
   auto result = std::make_shared<Buffer>();
@@ -423,11 +418,11 @@ BufferPtr VulkanDevice::createBuffer(
     info.usage       = usage;
     info.sharingMode = vk::SharingMode::eExclusive;
 
-    result->mBuffer = createBuffer(info);
+    result->mBuffer = createVkBuffer(info);
   }
 
   {
-    auto requirements = mDevice->getBufferMemoryRequirements(*result->mBuffer);
+    auto requirements = mVkDevice->getBufferMemoryRequirements(*result->mBuffer);
 
     vk::MemoryAllocateInfo info;
     info.allocationSize = requirements.size;
@@ -437,14 +432,14 @@ BufferPtr VulkanDevice::createBuffer(
     result->mMemory = allocateMemory(info);
   }
 
-  mDevice->bindBufferMemory(*result->mBuffer, *result->mMemory, 0);
+  mVkDevice->bindBufferMemory(*result->mBuffer, *result->mMemory, 0);
 
   return result;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void VulkanDevice::transitionImageLayout(
+void Device::transitionImageLayout(
   VkImagePtr& image, vk::ImageLayout oldLayout, vk::ImageLayout newLayout) const {
 
   vk::CommandBuffer commandBuffer = beginSingleTimeCommands();
@@ -497,8 +492,7 @@ void VulkanDevice::transitionImageLayout(
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void VulkanDevice::copyImage(
-  VkImagePtr& src, VkImagePtr& dst, uint32_t width, uint32_t height) const {
+void Device::copyImage(VkImagePtr& src, VkImagePtr& dst, uint32_t width, uint32_t height) const {
 
   vk::CommandBuffer commandBuffer = beginSingleTimeCommands();
 
@@ -524,4 +518,5 @@ void VulkanDevice::copyImage(
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+}
 }

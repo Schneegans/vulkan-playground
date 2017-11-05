@@ -27,6 +27,8 @@
 
 namespace Illusion {
 
+namespace Graphics {
+
 typedef std::shared_ptr<vk::Buffer>                 VkBufferPtr;
 typedef std::shared_ptr<vk::CommandPool>            VkCommandPoolPtr;
 typedef std::shared_ptr<vk::DebugReportCallbackEXT> VkDebugReportCallbackEXTPtr;
@@ -52,14 +54,16 @@ typedef std::shared_ptr<vk::SwapchainKHR>           VkSwapchainKHRPtr;
 ILLUSION_DECLARE_STRUCT(Buffer);
 ILLUSION_DECLARE_STRUCT(Image);
 ILLUSION_DECLARE_STRUCT(Texture);
+ILLUSION_DECLARE_STRUCT(FrameInfo);
 
 ILLUSION_DECLARE_CLASS(ShaderReflection);
-ILLUSION_DECLARE_CLASS(VulkanDevice);
-ILLUSION_DECLARE_CLASS(VulkanFramebuffer);
-ILLUSION_DECLARE_CLASS(VulkanInstance);
-ILLUSION_DECLARE_CLASS(VulkanPhysicalDevice);
-ILLUSION_DECLARE_CLASS(VulkanSurface);
+ILLUSION_DECLARE_CLASS(Device);
+ILLUSION_DECLARE_CLASS(Framebuffer);
+ILLUSION_DECLARE_CLASS(Instance);
+ILLUSION_DECLARE_CLASS(PhysicalDevice);
+ILLUSION_DECLARE_CLASS(Surface);
 ILLUSION_DECLARE_CLASS(Window);
+}
 }
 
 #undef ILLUSION_DECLARE_CLASS

@@ -8,33 +8,26 @@
 //                                                                                                //
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#ifndef ILLUSION_VULKAN_FRAMEBUFFER_HPP
-#define ILLUSION_VULKAN_FRAMEBUFFER_HPP
+#ifndef ILLUSION_GRAPHICS_VULKAN_PTR_HPP
+#define ILLUSION_GRAPHICS_VULKAN_PTR_HPP
 
 // ---------------------------------------------------------------------------------------- includes
-#include "VulkanDevice.hpp"
+#include <memory>
 
 namespace Illusion {
+namespace Graphics {
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-// -------------------------------------------------------------------------------------------------
-class VulkanFramebuffer {
-
- public:
-  // -------------------------------------------------------------------------------- public methods
-  VulkanFramebuffer(
-    VulkanDevicePtr const& device,
-    VkRenderPassPtr const& renderPass,
-    vk::Image const&       image,
-    vk::Extent2D const&    extend,
-    vk::Format             format);
-
-  vk::Image        mImage;
-  VkImageViewPtr   mImageView;
-  VkFramebufferPtr mFramebuffer;
+template <typename T>
+struct Identity {
+  typedef T type;
 };
+
+template <typename T>
+static std::shared_ptr<T>
+makeVulkanPtr(T const& vkObject, typename Identity<std::function<void(T* obj)>>::type deleter) {
+  return std::shared_ptr<T>(new T{vkObject}, deleter);
+}
+}
 }
 
-#endif // ILLUSION_VULKAN_FRAMEBUFFER_HPP
+#endif // ILLUSION_GRAPHICS_VULKAN_PTR_HPP

@@ -8,50 +8,51 @@
 //                                                                                                //
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#ifndef ILLUSION_GRAPHICS_WINDOW_HPP
-#define ILLUSION_GRAPHICS_WINDOW_HPP
+#ifndef ILLUSION_GRAPHICS_PIPELINE_HPP
+#define ILLUSION_GRAPHICS_PIPELINE_HPP
 
 // ---------------------------------------------------------------------------------------- includes
 #include "../fwd.hpp"
-#include <vector>
-
-struct GLFWwindow;
 
 namespace Illusion {
 namespace Graphics {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-//                                                                                                //
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // -------------------------------------------------------------------------------------------------
-class Window {
-
-  // ------------------------------------------------------------------------------ public interface
+class Pipeline {
 
  public:
-  // --------------------------------------------------------------------------------------- methods
-  Window(DevicePtr const& device);
-  ~Window();
+  // -------------------------------------------------------------------------------- public methods
+  Pipeline(
+    DevicePtr const&                device,
+    VkRenderPassPtr const&          renderPass,
+    std::vector<std::string> const& shaderFiles,
+    uint32_t                        materialCount);
+  virtual ~Pipeline();
 
-  void open(bool fullscreen);
-  void close();
-  bool shouldClose() const;
-  void processInput();
+  void use(FrameInfo const& info, vk::DescriptorSet const& descriptorSet);
 
-  DevicePtr const&  getDevice() const;
-  SurfacePtr const& getSurface() const;
+  void setPushConstantData(FrameInfo const& info, uint32_t offset, uint32_t size, uint8_t* data);
 
-  // ----------------------------------------------------------------------------- private interface
+  vk::DescriptorSet allocateDescriptorSet();
+  void freeDescriptorSet(vk::DescriptorSet const& set);
+
+  ShaderReflectionPtr const& getReflection() const { return mReflection; }
 
  private:
-  DevicePtr   mDevice;
-  SurfacePtr  mSurface;
-  GLFWwindow* mWindow{nullptr};
+  // ------------------------------------------------------------------------------- private members
+  DevicePtr           mDevice;
+  ShaderReflectionPtr mReflection;
+
+  VkRenderPassPtr          mVkRenderPass;
+  VkDescriptorPoolPtr      mVkDescriptorPool;
+  VkDescriptorSetLayoutPtr mVkDescriptorSetLayout;
+  VkPipelineLayoutPtr      mVkPipelineLayout;
+  VkPipelinePtr            mVkPipeline;
 };
-
-// -------------------------------------------------------------------------------------------------
 }
 }
 
-#endif // ILLUSION_GRAPHICS_WINDOW_HPP
+#endif // ILLUSION_GRAPHICS_PIPELINE_HPP

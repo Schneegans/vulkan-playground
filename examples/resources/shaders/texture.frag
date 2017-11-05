@@ -12,10 +12,14 @@
 
 layout(location = 0) in vec2 fragTexCoord;
 
+layout(binding = 1) uniform MaterialUniforms {
+    vec3 color;
+} material;
+
 layout(binding = 2) uniform sampler2D texSampler;
 
 layout(location = 0) out vec4 outColor;
 
 void main() {
-    outColor = texture(texSampler, fragTexCoord);
+    outColor = texture(texSampler, fragTexCoord) * vec4(material.color, 1.0);
 }

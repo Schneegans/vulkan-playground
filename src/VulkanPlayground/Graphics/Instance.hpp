@@ -8,28 +8,51 @@
 //                                                                                                //
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#ifndef ILLUSION_GRAPHICS_VULKAN_PHYSICAL_DEVICE_HPP
-#define ILLUSION_GRAPHICS_VULKAN_PHYSICAL_DEVICE_HPP
+#ifndef ILLUSION_GRAPHICS_INSTANCE_HPP
+#define ILLUSION_GRAPHICS_INSTANCE_HPP
 
 // ---------------------------------------------------------------------------------------- includes
 #include "../fwd.hpp"
 
+struct GLFWwindow;
+
 namespace Illusion {
+namespace Graphics {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // -------------------------------------------------------------------------------------------------
-class VulkanPhysicalDevice : public vk::PhysicalDevice {
+class Instance {
+
  public:
-  VulkanPhysicalDevice(vk::PhysicalDevice const& device);
+  // -------------------------------------------------------------------------------- public methods
+  Instance(std::string const& appName, bool debugMode = true);
 
-  VkDevicePtr createDevice(vk::DeviceCreateInfo const& info);
+  VkDevicePtr     createVkDevice() const;
+  VkSurfaceKHRPtr createVkSurface(GLFWwindow* window) const;
 
-  uint32_t findMemoryType(uint32_t typeFilter, vk::MemoryPropertyFlags properties) const;
+  PhysicalDevicePtr const& getPhysicalDevice() const { return mPhysicalDevice; }
+  int                      getGraphicsFamily() const { return mGraphicsFamily; }
+  int                      getComputeFamily() const { return mComputeFamily; }
+  int                      getPresentFamily() const { return mPresentFamily; }
 
-  void printInfo();
+ private:
+  // ------------------------------------------------------------------------------- private methods
+  void createInstance(std::string const& engineName, std::string const& appName);
+  void setupDebugCallback();
+  void pickPhysicalDevice();
+
+  // ------------------------------------------------------------------------------- private members
+  VkInstancePtr               mVkInstance;
+  VkDebugReportCallbackEXTPtr mVkDebugCallback;
+  PhysicalDevicePtr           mPhysicalDevice;
+
+  int mGraphicsFamily{-1}, mComputeFamily{-1}, mPresentFamily{-1};
+
+  bool mDebugMode{false};
 };
 }
+}
 
-#endif // ILLUSION_GRAPHICS_VULKAN_PHYSICAL_DEVICE_HPP
+#endif // ILLUSION_GRAPHICS_INSTANCE_HPP

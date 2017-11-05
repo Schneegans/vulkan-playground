@@ -8,17 +8,18 @@
 //                                                                                                //
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#ifndef ILLUSION_GRAPHICS_VULKAN_SURFACE_HPP
-#define ILLUSION_GRAPHICS_VULKAN_SURFACE_HPP
+#ifndef ILLUSION_GRAPHICS_SURFACE_HPP
+#define ILLUSION_GRAPHICS_SURFACE_HPP
 
 // ---------------------------------------------------------------------------------------- includes
-#include "VulkanDevice.hpp"
+#include "Device.hpp"
 
 #include <glm/glm.hpp>
 
 struct GLFWwindow;
 
 namespace Illusion {
+namespace Graphics {
 
 struct FrameInfo {
   vk::CommandBuffer mPrimaryCommandBuffer;
@@ -29,7 +30,7 @@ struct FrameInfo {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // -------------------------------------------------------------------------------------------------
-class VulkanSurface {
+class Surface {
 
  public:
   // -------------------------------------------------------------------------------- public classes
@@ -39,7 +40,7 @@ class VulkanSurface {
   };
 
   // -------------------------------------------------------------------------------- public methods
-  VulkanSurface(VulkanDevicePtr const& device, GLFWwindow* window);
+  Surface(DevicePtr const& device, GLFWwindow* window);
 
   FrameInfo beginFrame(CameraUniforms const& camera);
   void beginRenderPass(FrameInfo const& info) const;
@@ -48,11 +49,11 @@ class VulkanSurface {
 
   void recreate();
 
-  vk::Extent2D const&                   getExtent() const { return mExtent; }
-  VkRenderPassPtr const&                getRenderPass() const { return mRenderPass; }
-  uint32_t                              getImageCount() const { return mImageCount; }
-  std::vector<VulkanFramebuffer> const& getFramebuffers() const { return mFramebuffers; }
-  BufferPtr const& getCameraUniformBuffer() const { return mCameraUniformBuffer; };
+  vk::Extent2D const&             getExtent() const { return mExtent; }
+  VkRenderPassPtr const&          getRenderPass() const { return mRenderPass; }
+  uint32_t                        getImageCount() const { return mImageCount; }
+  std::vector<Framebuffer> const& getFramebuffers() const { return mFramebuffers; }
+  BufferPtr const&                getCameraUniformBuffer() const { return mCameraUniformBuffer; };
 
  private:
   // ------------------------------------------------------------------------------- private methods
@@ -63,7 +64,7 @@ class VulkanSurface {
   void createCommandBuffers();
 
   // ------------------------------------------------------------------------------- private members
-  VulkanDevicePtr mDevice;
+  DevicePtr mDevice;
 
   VkSurfaceKHRPtr mSurface;
   VkSemaphorePtr  mImageAvailableSemaphore;
@@ -72,15 +73,16 @@ class VulkanSurface {
   std::vector<vk::CommandBuffer> mPrimaryCommandBuffers;
   std::vector<VkFencePtr>        mFences;
 
-  VkSwapchainKHRPtr              mSwapChain;
-  VkRenderPassPtr                mRenderPass;
-  std::vector<VulkanFramebuffer> mFramebuffers;
-  uint32_t                       mImageCount;
-  vk::Format                     mImageFormat;
-  vk::Extent2D                   mExtent;
+  VkSwapchainKHRPtr        mSwapChain;
+  VkRenderPassPtr          mRenderPass;
+  std::vector<Framebuffer> mFramebuffers;
+  uint32_t                 mImageCount;
+  vk::Format               mImageFormat;
+  vk::Extent2D             mExtent;
 
   BufferPtr mCameraUniformBuffer;
 };
 }
+}
 
-#endif // ILLUSION_GRAPHICS_VULKAN_SURFACE_HPP
+#endif // ILLUSION_GRAPHICS_SURFACE_HPP

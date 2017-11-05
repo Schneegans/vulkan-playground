@@ -10,19 +10,30 @@
 
 #include <VulkanPlayground/Utils/Logger.hpp>
 
-#include <VulkanPlayground/Graphics/VulkanDevice.hpp>
-#include <VulkanPlayground/Graphics/VulkanInstance.hpp>
+#include <VulkanPlayground/Graphics/Device.hpp>
+#include <VulkanPlayground/Graphics/Instance.hpp>
+#include <VulkanPlayground/Graphics/Pipeline.hpp>
+#include <VulkanPlayground/Graphics/ShaderReflection.hpp>
+#include <VulkanPlayground/Graphics/Surface.hpp>
 #include <VulkanPlayground/Graphics/Window.hpp>
 
 #include <iostream>
 
 int main(int argc, char* argv[]) {
   try {
-    auto instance = std::make_shared<Illusion::VulkanInstance>("SimpleWindow");
-    auto device   = std::make_shared<Illusion::VulkanDevice>(instance);
-    auto window   = std::make_shared<Illusion::Window>(device);
+    auto instance{std::make_shared<Illusion::Graphics::Instance>("SimpleWindow")};
+    auto device{std::make_shared<Illusion::Graphics::Device>(instance)};
+    auto window{std::make_shared<Illusion::Graphics::Window>(device)};
 
-    window->open();
+    window->open(false);
+
+    std::vector<std::string> shaderModules{"data/shaders/texture.vert.spv",
+                                           "data/shaders/texture.frag.spv"};
+
+    auto pipeline{std::make_shared<Illusion::Graphics::Pipeline>(
+      device, window->getSurface()->getRenderPass(), shaderModules, 10)};
+
+    pipeline->getReflection()->print();
 
     while (!window->shouldClose()) {
       window->processInput();

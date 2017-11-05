@@ -9,19 +9,20 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // ---------------------------------------------------------------------------------------- includes
-#include "VulkanInstance.hpp"
+#include "Instance.hpp"
 
 #include "../Utils/Logger.hpp"
-#include "../Utils/stl_helpers.hpp"
-#include "VulkanPhysicalDevice.hpp"
+#include "PhysicalDevice.hpp"
+#include "VulkanPtr.hpp"
 
 #include <GLFW/glfw3.h>
 
 #include <iostream>
 #include <set>
+#include <sstream>
 
 namespace Illusion {
-
+namespace Graphics {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 namespace {
@@ -132,7 +133,7 @@ std::vector<const char*> getRequiredInstanceExtensions(bool debugMode) {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-VulkanInstance::VulkanInstance(std::string const& appName, bool debugMode)
+Instance::Instance(std::string const& appName, bool debugMode)
   : mDebugMode(debugMode) {
 
   if (!glfwInitialized) {
@@ -152,12 +153,11 @@ VulkanInstance::VulkanInstance(std::string const& appName, bool debugMode)
   createInstance("Illusion", appName);
   setupDebugCallback();
   pickPhysicalDevice();
-  createDevice();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void VulkanInstance::createInstance(std::string const& engineName, std::string const& appName) {
+void Instance::createInstance(std::string const& engineName, std::string const& appName) {
   // app info
   vk::ApplicationInfo appInfo;
   appInfo.pApplicationName   = appName.c_str();
@@ -183,7 +183,7 @@ void VulkanInstance::createInstance(std::string const& engineName, std::string c
   }
 
   ILLUSION_DEBUG << "Creating instance." << std::endl;
-  mInstance = makeVulkanPtr(vk::createInstance(info), [](vk::Instance* obj) {
+  mVkInstance = makeVulkanPtr(vk::createInstance(info), [](vk::Instance* obj) {
     ILLUSION_DEBUG << "Deleting instance." << std::endl;
     obj->destroy();
   });
@@ -191,11 +191,11 @@ void VulkanInstance::createInstance(std::string const& engineName, std::string c
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void VulkanInstance::setupDebugCallback() {
+void Instance::setupDebugCallback() {
   if (!mDebugMode) { return; }
 
   auto createCallback{
-    (PFN_vkCreateDebugReportCallbackEXT)mInstance->getProcAddr("vkCreateDebugReportCallbackEXT")};
+    (PFN_vkCreateDebugReportCallbackEXT)mVkInstance->getProcAddr("vkCreateDebugReportCallbackEXT")};
 
   vk::DebugReportCallbackCreateInfoEXT info;
   info.flags = vk::DebugReportFlagBitsEXT::eInformation | vk::DebugReportFlagBitsEXT::eWarning |
@@ -204,13 +204,13 @@ void VulkanInstance::setupDebugCallback() {
   info.pfnCallback = messageCallback;
 
   VkDebugReportCallbackEXT tmp;
-  if (createCallback(*mInstance, (VkDebugReportCallbackCreateInfoEXT*)&info, nullptr, &tmp)) {
+  if (createCallback(*mVkInstance, (VkDebugReportCallbackCreateInfoEXT*)&info, nullptr, &tmp)) {
     throw std::runtime_error{"Failed to set up debug callback!"};
   }
 
   ILLUSION_DEBUG << "Creating debug callback." << std::endl;
-  auto instance{mInstance};
-  mDebugCallback =
+  auto instance{mVkInstance};
+  mVkDebugCallback =
     makeVulkanPtr(vk::DebugReportCallbackEXT(tmp), [instance](vk::DebugReportCallbackEXT* obj) {
       auto destroyCallback = (PFN_vkDestroyDebugReportCallbackEXT)instance->getProcAddr(
         "vkDestroyDebugReportCallbackEXT");
@@ -221,8 +221,8 @@ void VulkanInstance::setupDebugCallback() {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void VulkanInstance::pickPhysicalDevice() {
-  auto physicalDevices{mInstance->enumeratePhysicalDevices()};
+void Instance::pickPhysicalDevice() {
+  auto physicalDevices{mVkInstance->enumeratePhysicalDevices()};
 
   // loop through physical devices and choose a suitable one
   for (auto const& physicalDevice : physicalDevices) {
@@ -230,7 +230,7 @@ void VulkanInstance::pickPhysicalDevice() {
     // check whether the required queue families are supported
     int graphicsFamily{chooseQueueFamily(physicalDevice, vk::QueueFlagBits::eGraphics)};
     int computeFamily{chooseQueueFamily(physicalDevice, vk::QueueFlagBits::eCompute)};
-    int presentFamily{choosePresentQueueFamily(physicalDevice, *mInstance)};
+    int presentFamily{choosePresentQueueFamily(physicalDevice, *mVkInstance)};
 
     // check whether all required queue types are supported
     if (graphicsFamily < 0 || presentFamily < 0 || computeFamily < 0) { continue; }
@@ -246,7 +246,7 @@ void VulkanInstance::pickPhysicalDevice() {
     if (!requiredExtensions.empty()) { continue; }
 
     // all regquired extensions are supported - take this device!
-    mPhysicalDevice = std::make_shared<VulkanPhysicalDevice>(physicalDevice);
+    mPhysicalDevice = std::make_shared<PhysicalDevice>(physicalDevice);
     mGraphicsFamily = graphicsFamily;
     mComputeFamily  = computeFamily;
     mPresentFamily  = presentFamily;
@@ -261,7 +261,7 @@ void VulkanInstance::pickPhysicalDevice() {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-VkDevicePtr VulkanInstance::createDevice() const {
+VkDevicePtr Instance::createVkDevice() const {
 
   std::vector<vk::DeviceQueueCreateInfo> queueCreateInfos;
 
@@ -288,21 +288,21 @@ VkDevicePtr VulkanInstance::createDevice() const {
   createInfo.enabledExtensionCount   = static_cast<uint32_t>(DEVICE_EXTENSIONS.size());
   createInfo.ppEnabledExtensionNames = DEVICE_EXTENSIONS.data();
 
-  return mPhysicalDevice->createDevice(createInfo);
+  return mPhysicalDevice->createVkDevice(createInfo);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-VkSurfaceKHRPtr VulkanInstance::createSurface(GLFWwindow* window) const {
+VkSurfaceKHRPtr Instance::createVkSurface(GLFWwindow* window) const {
   VkSurfaceKHR tmp;
-  if (glfwCreateWindowSurface(*mInstance, window, nullptr, &tmp) != VK_SUCCESS) {
+  if (glfwCreateWindowSurface(*mVkInstance, window, nullptr, &tmp) != VK_SUCCESS) {
     throw std::runtime_error{"Failed to create window surface!"};
   }
 
   ILLUSION_DEBUG << "Creating window surface." << std::endl;
 
   // copying instance to keep reference counting up until the surface is destroyed
-  auto instance{mInstance};
+  auto instance{mVkInstance};
   return makeVulkanPtr(vk::SurfaceKHR(tmp), [instance](vk::SurfaceKHR* obj) {
     ILLUSION_DEBUG << "Deleting window surface." << std::endl;
     instance->destroySurfaceKHR(*obj);
@@ -310,4 +310,5 @@ VkSurfaceKHRPtr VulkanInstance::createSurface(GLFWwindow* window) const {
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+}
 }

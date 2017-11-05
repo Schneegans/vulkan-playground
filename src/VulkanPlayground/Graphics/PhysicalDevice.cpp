@@ -9,9 +9,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // ---------------------------------------------------------------------------------------- includes
-#include "VulkanPhysicalDevice.hpp"
+#include "PhysicalDevice.hpp"
+
 #include "../Utils/Logger.hpp"
-#include "../Utils/stl_helpers.hpp"
+#include "VulkanPtr.hpp"
 
 #include <cmath>
 #include <iomanip>
@@ -19,7 +20,7 @@
 #include <sstream>
 
 namespace Illusion {
-
+namespace Graphics {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 namespace {
@@ -57,7 +58,7 @@ std::string printMin(S val, T ref) {
   else if (val > ref)
     color = Logger::PRINT_GREEN;
 
-  return color + toString(val) + Logger::PRINT_RESET + " (" + toString(ref) + ")";
+  return color + std::to_string(val) + Logger::PRINT_RESET + " (" + std::to_string(ref) + ")";
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -71,7 +72,7 @@ std::string printMax(S val, T ref) {
   else if (val < ref)
     color = Logger::PRINT_GREEN;
 
-  return color + toString(val) + Logger::PRINT_RESET + " (" + toString(ref) + ")";
+  return color + std::to_string(val) + Logger::PRINT_RESET + " (" + std::to_string(ref) + ")";
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -79,12 +80,12 @@ std::string printMax(S val, T ref) {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-VulkanPhysicalDevice::VulkanPhysicalDevice(vk::PhysicalDevice const& device)
+PhysicalDevice::PhysicalDevice(vk::PhysicalDevice const& device)
   : vk::PhysicalDevice(device) {}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-VkDevicePtr VulkanPhysicalDevice::createDevice(vk::DeviceCreateInfo const& info) {
+VkDevicePtr PhysicalDevice::createVkDevice(vk::DeviceCreateInfo const& info) {
   ILLUSION_DEBUG << "Creating device." << std::endl;
   return makeVulkanPtr(vk::PhysicalDevice::createDevice(info), [](vk::Device* obj) {
     ILLUSION_DEBUG << "Deleting device." << std::endl;
@@ -94,8 +95,8 @@ VkDevicePtr VulkanPhysicalDevice::createDevice(vk::DeviceCreateInfo const& info)
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-uint32_t VulkanPhysicalDevice::findMemoryType(
-  uint32_t typeFilter, vk::MemoryPropertyFlags properties) const {
+uint32_t
+PhysicalDevice::findMemoryType(uint32_t typeFilter, vk::MemoryPropertyFlags properties) const {
 
   auto memProperties{getMemoryProperties()};
 
@@ -112,15 +113,15 @@ uint32_t VulkanPhysicalDevice::findMemoryType(
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void VulkanPhysicalDevice::printInfo() {
+void PhysicalDevice::printInfo() {
   // basic information
   vk::PhysicalDeviceProperties properties{getProperties()};
   ILLUSION_DEBUG << Logger::PRINT_BOLD << "Physical Device Information " << Logger::PRINT_RESET
                  << std::endl;
-  printVal("apiVersion", {toString(properties.apiVersion)});
-  printVal("driverVersion", {toString(properties.driverVersion)});
-  printVal("vendorID", {toString(properties.vendorID)});
-  printVal("deviceID", {toString(properties.deviceID)});
+  printVal("apiVersion", {std::to_string(properties.apiVersion)});
+  printVal("driverVersion", {std::to_string(properties.driverVersion)});
+  printVal("vendorID", {std::to_string(properties.vendorID)});
+  printVal("deviceID", {std::to_string(properties.deviceID)});
   printVal("deviceType", {vk::to_string(properties.deviceType)});
   printVal("deviceName", {properties.deviceName});
 
@@ -129,13 +130,14 @@ void VulkanPhysicalDevice::printInfo() {
   ILLUSION_DEBUG << Logger::PRINT_BOLD << "Memory Information " << Logger::PRINT_RESET << std::endl;
   for (unsigned i{0}; i < memoryProperties.memoryTypeCount; ++i) {
     printVal(
-      "Memory type " + toString(i), {vk::to_string(memoryProperties.memoryTypes[i].propertyFlags)});
+      "Memory type " + std::to_string(i),
+      {vk::to_string(memoryProperties.memoryTypes[i].propertyFlags)});
   }
 
   for (unsigned i{0}; i < memoryProperties.memoryHeapCount; ++i) {
     printVal(
-      "Memory heap " + toString(i),
-      {toString(memoryProperties.memoryHeaps[i].size / (1024 * 1024)) + " MB " +
+      "Memory heap " + std::to_string(i),
+      {std::to_string(memoryProperties.memoryHeaps[i].size / (1024 * 1024)) + " MB " +
        vk::to_string(memoryProperties.memoryHeaps[i].flags)});
   }
 
@@ -209,12 +211,12 @@ void VulkanPhysicalDevice::printInfo() {
   printVal("maxImageArrayLayers",                             {printMin(limits.maxImageArrayLayers, 256u)});
   printVal("maxTexelBufferElements",                          {printMin(limits.maxTexelBufferElements, 65536u)});
   printVal("maxUniformBufferRange",                           {printMin(limits.maxUniformBufferRange, 16384u)});
-  printVal("maxStorageBufferRange",                           {printMin(limits.maxStorageBufferRange, std::pow(2, 27))});
+  printVal("maxStorageBufferRange",                           {printMin(limits.maxStorageBufferRange, (unsigned)std::pow(2, 27))});
   printVal("maxPushConstantsSize",                            {printMin(limits.maxPushConstantsSize, 128u)});
   printVal("maxMemoryAllocationCount",                        {printMin(limits.maxMemoryAllocationCount, 4096u)});
   printVal("maxSamplerAllocationCount",                       {printMin(limits.maxSamplerAllocationCount, 4000u)});
   printVal("bufferImageGranularity",                          {printMax(limits.bufferImageGranularity, 131072u)});
-  printVal("sparseAddressSpaceSize",                          {printMin(limits.sparseAddressSpaceSize, std::pow(2, 31))});
+  printVal("sparseAddressSpaceSize",                          {printMin(limits.sparseAddressSpaceSize, (unsigned)std::pow(2, 31))});
   printVal("maxBoundDescriptorSets",                          {printMin(limits.maxBoundDescriptorSets, 4u)});
   printVal("maxPerStageDescriptorSamplers",                   {printMin(limits.maxPerStageDescriptorSamplers, 16u)});
   printVal("maxPerStageDescriptorUniformBuffers",             {printMin(limits.maxPerStageDescriptorUniformBuffers, 12u)});
@@ -260,8 +262,8 @@ void VulkanPhysicalDevice::printInfo() {
   printVal("subPixelPrecisionBits",                           {printMin(limits.subPixelPrecisionBits, 4u)});
   printVal("subTexelPrecisionBits",                           {printMin(limits.subTexelPrecisionBits, 4u)});
   printVal("mipmapPrecisionBits",                             {printMin(limits.mipmapPrecisionBits, 4u)});
-  printVal("maxDrawIndexedIndexValue",                        {printMin(limits.maxDrawIndexedIndexValue, std::pow(2, 32) - 1)});
-  printVal("maxDrawIndirectCount",                            {printMin(limits.maxDrawIndirectCount, std::pow(2, 16) - 1)});
+  printVal("maxDrawIndexedIndexValue",                        {printMin(limits.maxDrawIndexedIndexValue, (unsigned)(std::pow(2, 32) - 1))});
+  printVal("maxDrawIndirectCount",                            {printMin(limits.maxDrawIndirectCount, (unsigned)(std::pow(2, 16) - 1))});
   printVal("maxSamplerLodBias",                               {printMin(limits.maxSamplerLodBias, 2)});
   printVal("maxSamplerAnisotropy",                            {printMin(limits.maxSamplerAnisotropy, 16)});
   printVal("maxViewports",                                    {printMin(limits.maxViewports, 16u)});
@@ -293,8 +295,8 @@ void VulkanPhysicalDevice::printInfo() {
   printVal("sampledImageStencilSampleCounts",                 {vk::to_string(limits.sampledImageStencilSampleCounts) + " ({1 | 4})"});
   printVal("storageImageSampleCounts",                        {vk::to_string(limits.storageImageSampleCounts) + " ({1 | 4})"});
   printVal("maxSampleMaskWords",                              {printMin(limits.maxSampleMaskWords, 1u)});
-  printVal("timestampComputeAndGraphics",                     {toString(limits.timestampComputeAndGraphics)});
-  printVal("timestampPeriod",                                 {toString(limits.timestampPeriod)});
+  printVal("timestampComputeAndGraphics",                     {std::to_string(limits.timestampComputeAndGraphics)});
+  printVal("timestampPeriod",                                 {std::to_string(limits.timestampPeriod)});
   printVal("maxClipDistances",                                {printMin(limits.maxClipDistances, 8u)});
   printVal("maxCullDistances",                                {printMin(limits.maxCullDistances, 8u)});
   printVal("maxCombinedClipAndCullDistances",                 {printMin(limits.maxCombinedClipAndCullDistances, 8u)});
@@ -303,14 +305,15 @@ void VulkanPhysicalDevice::printInfo() {
   printVal("lineWidthRange",                                  {printMax(limits.lineWidthRange[0], 1.0), printMin(limits.lineWidthRange[1], 8.0 - limits.lineWidthGranularity)});
   printVal("pointSizeGranularity",                            {printMax(limits.pointSizeGranularity, 1)});
   printVal("lineWidthGranularity",                            {printMax(limits.lineWidthGranularity, 1)});
-  printVal("strictLines",                                     {toString(limits.strictLines)});
-  printVal("standardSampleLocations",                         {toString(limits.standardSampleLocations)});
-  printVal("optimalBufferCopyOffsetAlignment",                {toString(limits.optimalBufferCopyOffsetAlignment)});
-  printVal("optimalBufferCopyRowPitchAlignment",              {toString(limits.optimalBufferCopyRowPitchAlignment)});
+  printVal("strictLines",                                     {std::to_string(limits.strictLines)});
+  printVal("standardSampleLocations",                         {std::to_string(limits.standardSampleLocations)});
+  printVal("optimalBufferCopyOffsetAlignment",                {std::to_string(limits.optimalBufferCopyOffsetAlignment)});
+  printVal("optimalBufferCopyRowPitchAlignment",              {std::to_string(limits.optimalBufferCopyRowPitchAlignment)});
   printVal("nonCoherentAtomSize",                             {printMax(limits.nonCoherentAtomSize, 256u)});
 
   // clang-format on
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+}
 }

@@ -9,14 +9,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // ---------------------------------------------------------------------------------------- includes
-#include "VulkanFramebuffer.hpp"
+#include "Framebuffer.hpp"
+
+#include "Device.hpp"
 
 namespace Illusion {
-
+namespace Graphics {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-VulkanFramebuffer::VulkanFramebuffer(
-  VulkanDevicePtr const& device,
+Framebuffer::Framebuffer(
+  DevicePtr const&       device,
   VkRenderPassPtr const& renderPass,
   vk::Image const&       image,
   vk::Extent2D const&    extend,
@@ -37,7 +39,7 @@ VulkanFramebuffer::VulkanFramebuffer(
     info.subresourceRange.baseArrayLayer = 0;
     info.subresourceRange.layerCount     = 1;
 
-    mImageView = device->createImageView(info);
+    mImageView = device->createVkImageView(info);
   }
 
   {
@@ -51,9 +53,10 @@ VulkanFramebuffer::VulkanFramebuffer(
     info.height          = extend.height;
     info.layers          = 1;
 
-    mFramebuffer = device->createFramebuffer(info);
+    mFramebuffer = device->createVkFramebuffer(info);
   }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+}
 }

@@ -8,49 +8,35 @@
 //                                                                                                //
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#ifndef ILLUSION_VULKAN_INSTANCE_HPP
-#define ILLUSION_VULKAN_INSTANCE_HPP
+#ifndef ILLUSION_GRAPHICS_FRAMEBUFFER_HPP
+#define ILLUSION_GRAPHICS_FRAMEBUFFER_HPP
 
 // ---------------------------------------------------------------------------------------- includes
 #include "../fwd.hpp"
 
-struct GLFWwindow;
-
 namespace Illusion {
+namespace Graphics {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // -------------------------------------------------------------------------------------------------
-class VulkanInstance {
+class Framebuffer {
 
  public:
   // -------------------------------------------------------------------------------- public methods
-  VulkanInstance(std::string const& appName, bool debugMode = true);
+  Framebuffer(
+    DevicePtr const&       device,
+    VkRenderPassPtr const& renderPass,
+    vk::Image const&       image,
+    vk::Extent2D const&    extend,
+    vk::Format             format);
 
-  VkDevicePtr     createDevice() const;
-  VkSurfaceKHRPtr createSurface(GLFWwindow* window) const;
-
-  VulkanPhysicalDevicePtr const& getPhysicalDevice() const { return mPhysicalDevice; }
-  int                            getGraphicsFamily() const { return mGraphicsFamily; }
-  int                            getComputeFamily() const { return mComputeFamily; }
-  int                            getPresentFamily() const { return mPresentFamily; }
-
- private:
-  // ------------------------------------------------------------------------------- private methods
-  void createInstance(std::string const& engineName, std::string const& appName);
-  void setupDebugCallback();
-  void pickPhysicalDevice();
-
-  // ------------------------------------------------------------------------------- private members
-  VkInstancePtr               mInstance;
-  VkDebugReportCallbackEXTPtr mDebugCallback;
-  VulkanPhysicalDevicePtr     mPhysicalDevice;
-
-  int mGraphicsFamily{-1}, mComputeFamily{-1}, mPresentFamily{-1};
-
-  bool mDebugMode{false};
+  vk::Image        mImage;
+  VkImageViewPtr   mImageView;
+  VkFramebufferPtr mFramebuffer;
 };
 }
+}
 
-#endif // ILLUSION_VULKAN_INSTANCE_HPP
+#endif // ILLUSION_GRAPHICS_FRAMEBUFFER_HPP

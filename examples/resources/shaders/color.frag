@@ -13,8 +13,8 @@
 layout(location = 0) out vec4 outColor;
 
 layout(push_constant, std140) uniform PushConstants {
-    // mat3  transform;
-    // float depth;
+    mat3  transform;
+    float depth;
     layout(offset=64) vec4 color;
 } model;
 
