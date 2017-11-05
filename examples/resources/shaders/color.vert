@@ -21,20 +21,18 @@ vec2 positions[4] = vec2[](
     vec2(0.5, 0.5)
 );
 
-layout(binding = 0) uniform CameraUniforms {
-    mat3 transform;
-    float parallax;
+layout(binding = 0) uniform Uniforms {
+    vec3 color;
     float time;
-} view;
+} uniforms;
 
-layout(push_constant, std140) uniform PushConstants {
-    mat3  transform;
-    float depth;
-    // vec4 color;
-} model;
+// layout(push_constant, std140) uniform PushConstants {
+//     mat3  transform;
+//     float depth;
+// } model;
 
 void main() {
-    vec3 pos = view.transform * model.transform * vec3(positions[gl_VertexIndex], 1.0);
-    pos.xy *= pow(view.parallax, model.depth);
-    gl_Position = vec4(pos.xy, 0.0, 1.0);
+    // vec3 pos = view.transform * model.transform * vec3(positions[gl_VertexIndex], 1.0);
+    // pos.xy *= pow(view.parallax, model.depth);
+    gl_Position = vec4(positions[gl_VertexIndex], 0.0, 1.0);
 }

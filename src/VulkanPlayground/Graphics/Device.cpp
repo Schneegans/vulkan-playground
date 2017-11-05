@@ -234,6 +234,7 @@ VkBufferPtr Device::createVkBuffer(vk::BufferCreateInfo const& info) const {
   auto device{mVkDevice};
   return makeVulkanPtr(device->createBuffer(info), [device](vk::Buffer* obj) {
     ILLUSION_DEBUG << "Deleting buffer." << std::endl;
+    device->waitIdle(); // is that really necessary?
     device->destroyBuffer(*obj);
   });
 }

@@ -33,16 +33,10 @@ struct FrameInfo {
 class Surface {
 
  public:
-  // -------------------------------------------------------------------------------- public classes
-  struct CameraUniforms {
-    glm::mat4 mTransform;
-    float     mTime;
-  };
-
   // -------------------------------------------------------------------------------- public methods
   Surface(DevicePtr const& device, GLFWwindow* window);
 
-  FrameInfo beginFrame(CameraUniforms const& camera);
+  FrameInfo beginFrame();
   void beginRenderPass(FrameInfo const& info) const;
   void endRenderPass(FrameInfo const& info) const;
   void endFrame(FrameInfo const& info) const;
@@ -53,7 +47,6 @@ class Surface {
   VkRenderPassPtr const&          getRenderPass() const { return mRenderPass; }
   uint32_t                        getImageCount() const { return mImageCount; }
   std::vector<Framebuffer> const& getFramebuffers() const { return mFramebuffers; }
-  BufferPtr const&                getCameraUniformBuffer() const { return mCameraUniformBuffer; };
 
  private:
   // ------------------------------------------------------------------------------- private methods
@@ -79,8 +72,6 @@ class Surface {
   uint32_t                 mImageCount;
   vk::Format               mImageFormat;
   vk::Extent2D             mExtent;
-
-  BufferPtr mCameraUniformBuffer;
 };
 }
 }

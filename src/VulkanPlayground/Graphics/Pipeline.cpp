@@ -38,11 +38,29 @@ Pipeline::Pipeline(
   std::vector<std::vector<uint32_t>> shaderCodes;
 
   for (auto const& shaderFile : shaderFiles) {
-    shaderCodes.push_back(File<uint32_t>(shaderFile).getContent());
-    reflections.push_back(std::make_shared<ShaderReflection>(shaderFile, shaderCodes.back()));
+    try {
+      shaderCodes.push_back(File<uint32_t>(shaderFile).getContent());
+      reflections.push_back(std::make_shared<ShaderReflection>(shaderCodes.back()));
+    } catch (std::runtime_error const& e) {
+      throw std::runtime_error{"Failed to get reflection information for " + shaderFile + ": " +
+                               e.what()};
+    }
   }
 
-  mReflection = std::make_shared<ShaderReflection>(reflections);
+  try {
+    mReflection = std::make_shared<ShaderReflection>(reflections);
+  } catch (std::runtime_error const& e) {
+    std::string files;
+    for (size_t i{0}; i < shaderFiles.size(); ++i) {
+      files += shaderFiles[i];
+      if (i == shaderFiles.size() - 2)
+        files += " and ";
+      else if (i < shaderFiles.size() - 2)
+        files += ", ";
+    }
+    throw std::runtime_error{"Failed to merge reflection information for " + files + ": " +
+                             e.what()};
+  }
 
   // create descriptor pool ------------------------------------------------------------------------
   {
@@ -151,11 +169,6 @@ Pipeline::Pipeline(
   std::vector<vk::PushConstantRange> pushConstantRanges;
   for (auto const& pushConstant : mReflection->getPushConstantBuffers()) {
     pushConstantRanges.push_back({pushConstant.mActiveStages, 0, pushConstant.mSize});
-    // for (auto const& range : pushConstant.mMembers) {
-    //   Illusion::ILLUSION_MESSAGE << range.second.mActiveStages << std::endl;
-    //   pushConstantRanges.push_back(
-    //     {ShaderReflection::toVk(range.second.mActiveStages), range.first, range.second.mSize});
-    // }
   }
 
   vk::PipelineLayoutCreateInfo pipelineLayoutInfo;
@@ -231,7 +244,8 @@ void Pipeline::setPushConstantData(
   //         *mVkPipelineLayout, range->second.mActiveStages, offset, size, data);
   //       return;
   //     } else {
-  //       throw std::runtime_error{"Failed to set push constant: Size does not match! (should be "
+  //       throw std::runtime_error{"Failed to set push constant: Size does not match! (should be
+  //       "
   //       +
   //                                std::to_string(range->second.mSize) + " but got " +
   //                                std::to_string(size) + ")"};
@@ -247,12 +261,12 @@ void Pipeline::setPushConstantData(
 
 vk::DescriptorSet Pipeline::allocateDescriptorSet() {
   vk::DescriptorSetLayout       descriptorSetLayouts[] = {*mVkDescriptorSetLayout};
-  vk::DescriptorSetAllocateInfo allocInfo;
-  allocInfo.descriptorPool     = *mVkDescriptorPool;
-  allocInfo.descriptorSetCount = 1;
-  allocInfo.pSetLayouts        = descriptorSetLayouts;
+  vk::DescriptorSetAllocateInfo info;
+  info.descriptorPool     = *mVkDescriptorPool;
+  info.descriptorSetCount = 1;
+  info.pSetLayouts        = descriptorSetLayouts;
 
-  return mDevice->getVkDevice()->allocateDescriptorSets(allocInfo)[0];
+  return mDevice->getVkDevice()->allocateDescriptorSets(info)[0];
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

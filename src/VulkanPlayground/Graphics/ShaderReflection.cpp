@@ -112,8 +112,7 @@ std::string toString(spirv_cross::SPIRType type) {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-ShaderReflection::ShaderReflection(std::string const& name, std::vector<uint32_t> const& code)
-  : mName(name) {
+ShaderReflection::ShaderReflection(std::vector<uint32_t> const& code) {
   spirv_cross::Compiler        parser{code};
   spirv_cross::ShaderResources resources       = parser.get_shader_resources();
   auto                         activeVariables = parser.get_active_interface_variables();
@@ -129,7 +128,7 @@ ShaderReflection::ShaderReflection(std::string const& name, std::vector<uint32_t
     mStages = vk::ShaderStageFlagBits::eFragment;
     break;
   default:
-    ILLUSION_WARNING << "Shader stage of module " << mName << " is not supported!" << std::endl;
+    throw std::runtime_error{"Shader stage is not supported!"};
     break;
   }
 
@@ -191,20 +190,19 @@ ShaderReflection::ShaderReflection(std::string const& name, std::vector<uint32_t
   collectSamplers(resources.sampled_images, mSamplers);
 
   // warn if not supported features are used -------------------------------------------------------
-  auto printNotSupported =
+  auto errorNotSupported =
     [this](std::string const& name, std::vector<spirv_cross::Resource> const& resources) {
       if (resources.size() > 0) {
-        ILLUSION_WARNING << "Shader module " << mName << " constains " << name
-                         << " which are not supported by the Material yet!" << std::endl;
+        throw std::runtime_error{"Support for " + name + " is not implemented yet."};
       }
     };
 
-  printNotSupported("atomic counters", resources.atomic_counters);
-  printNotSupported("separate images", resources.separate_images);
-  printNotSupported("separate samplers", resources.separate_samplers);
-  printNotSupported("storage buffers", resources.storage_buffers);
-  printNotSupported("storage images", resources.storage_images);
-  printNotSupported("subpass inputs", resources.subpass_inputs);
+  errorNotSupported("Atomic counters", resources.atomic_counters);
+  errorNotSupported("Separate images", resources.separate_images);
+  errorNotSupported("Separate samplers", resources.separate_samplers);
+  errorNotSupported("Storage buffers", resources.storage_buffers);
+  errorNotSupported("Storage images", resources.storage_images);
+  errorNotSupported("Subpass inputs", resources.subpass_inputs);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -212,92 +210,80 @@ ShaderReflection::ShaderReflection(std::string const& name, std::vector<uint32_t
 ShaderReflection::ShaderReflection(std::vector<ShaderReflectionPtr> const& stages) {
   for (auto const& stage : stages) {
 
-    // check that we do not have such a stage already - this should not happen!
+    // check that we do not have such a stage already
     if ((VkShaderStageFlags)(mStages & stage->mStages) > 0) {
-      ILLUSION_WARNING << toString(stage->mStages) << " shader stage is already part of "
-                       << "the ShaderReflection!" << std::endl;
+      throw std::runtime_error{toString(stage->mStages) + " shader stage is already present!"};
     }
 
-    // concatenate name and stage
-    if (mName.size() > 0) { mName += " | "; }
-    mName += stage->mName;
-
+    // concatenate stages
     mStages |= stage->mStages;
 
     // combine buffers
-    auto mergeBuffers = [this](
-      std::vector<Buffer> const& srcBuffers, std::vector<Buffer>& dstBuffers) {
+    auto mergeBuffers =
+      [this](std::vector<Buffer> const& srcBuffers, std::vector<Buffer>& dstBuffers) {
 
-      for (auto const& srcBuffer : srcBuffers) {
-        bool merged = false;
+        for (auto const& srcBuffer : srcBuffers) {
+          bool merged = false;
 
-        for (auto& dstBuffer : dstBuffers) {
+          for (auto& dstBuffer : dstBuffers) {
 
-          // there is already a buffer at this binding point
-          if (srcBuffer.mBinding == dstBuffer.mBinding) {
+            // there is already a buffer at this binding point
+            if (srcBuffer.mBinding == dstBuffer.mBinding) {
 
-            // check if they have the same type
-            if (srcBuffer.mType != dstBuffer.mType) {
-              throw std::runtime_error{"Failed to merge reflection information for shader stages " +
-                                       mName + ": Types of Buffers at binding point " +
-                                       std::to_string(dstBuffer.mBinding) + " do not match!"};
-            }
-
-            // check if they have the same size
-            if (srcBuffer.mSize != dstBuffer.mSize) {
-              throw std::runtime_error{"Failed to merge reflection information for shader stages " +
-                                       mName + ": Sizes of Buffers " + dstBuffer.mType +
-                                       " at binding point " + std::to_string(dstBuffer.mBinding) +
-                                       " do not match!"};
-            }
-
-            // check if they have the same ranges
-            if (srcBuffer.mRanges.size() != dstBuffer.mRanges.size()) {
-              throw std::runtime_error{"Failed to merge reflection information for shader stages " +
-                                       mName + ": Ranges of Buffer " + dstBuffer.mType +
-                                       " at binding point " + std::to_string(dstBuffer.mBinding) +
-                                       " do not match!"};
-            }
-
-            for (size_t i{0}; i < srcBuffer.mRanges.size(); ++i) {
               // check if they have the same type
-              if (srcBuffer.mRanges[i].mType != dstBuffer.mRanges[i].mType) {
-                throw std::runtime_error{
-                  "Failed to merge reflection information for shader stages " + mName +
-                  ": Types of Range #" + std::to_string(i) + " of Buffer " + dstBuffer.mType +
-                  " at binding point " + std::to_string(dstBuffer.mBinding) + " do not match!"};
+              if (srcBuffer.mType != dstBuffer.mType) {
+                throw std::runtime_error{"Types of Buffers at binding point " +
+                                         std::to_string(dstBuffer.mBinding) + " do not match!"};
               }
 
               // check if they have the same size
-              if (srcBuffer.mRanges[i].mSize != dstBuffer.mRanges[i].mSize) {
-                throw std::runtime_error{
-                  "Failed to merge reflection information for shader stages " + mName +
-                  ": Sizes of Range #" + std::to_string(i) + " of Buffer " + dstBuffer.mType +
-                  " at binding point " + std::to_string(dstBuffer.mBinding) + " do not match!"};
+              if (srcBuffer.mSize != dstBuffer.mSize) {
+                throw std::runtime_error{"Sizes of Buffers at binding point " +
+                                         std::to_string(dstBuffer.mBinding) + " do not match!"};
               }
 
-              // check if they have the same offsets
-              if (srcBuffer.mRanges[i].mOffset != dstBuffer.mRanges[i].mOffset) {
-                throw std::runtime_error{
-                  "Failed to merge reflection information for shader stages " + mName +
-                  ": Offsets of Range #" + std::to_string(i) + " of Buffer " + dstBuffer.mType +
-                  " at binding point " + std::to_string(dstBuffer.mBinding) + " do not match!"};
+              // check if they have the same ranges
+              if (srcBuffer.mRanges.size() != dstBuffer.mRanges.size()) {
+                throw std::runtime_error{"Ranges of Buffers at binding point " +
+                                         std::to_string(dstBuffer.mBinding) + " do not match!"};
               }
 
-              dstBuffer.mRanges[i].mActiveStages |= srcBuffer.mRanges[i].mActiveStages;
+              for (size_t i{0}; i < srcBuffer.mRanges.size(); ++i) {
+                // check if they have the same type
+                if (srcBuffer.mRanges[i].mType != dstBuffer.mRanges[i].mType) {
+                  throw std::runtime_error{"Types of Range #" + std::to_string(i) +
+                                           " of Buffer at binding point " +
+                                           std::to_string(dstBuffer.mBinding) + " do not match!"};
+                }
+
+                // check if they have the same size
+                if (srcBuffer.mRanges[i].mSize != dstBuffer.mRanges[i].mSize) {
+                  throw std::runtime_error{"Sizes of Range #" + std::to_string(i) + " of Buffer " +
+                                           dstBuffer.mType + " at binding point " +
+                                           std::to_string(dstBuffer.mBinding) + " do not match!"};
+                }
+
+                // check if they have the same offsets
+                if (srcBuffer.mRanges[i].mOffset != dstBuffer.mRanges[i].mOffset) {
+                  throw std::runtime_error{"Offsets of Range #" + std::to_string(i) +
+                                           " of Buffer " + dstBuffer.mType + " at binding point " +
+                                           std::to_string(dstBuffer.mBinding) + " do not match!"};
+                }
+
+                dstBuffer.mRanges[i].mActiveStages |= srcBuffer.mRanges[i].mActiveStages;
+              }
+
+              dstBuffer.mActiveStages |= srcBuffer.mActiveStages;
+
+              merged = true;
+              break;
             }
-
-            dstBuffer.mActiveStages |= srcBuffer.mActiveStages;
-
-            merged = true;
-            break;
           }
-        }
 
-        // this buffer is not part of the combined module yet
-        if (!merged) dstBuffers.push_back(srcBuffer);
-      }
-    };
+          // this buffer is not part of the combined module yet
+          if (!merged) dstBuffers.push_back(srcBuffer);
+        }
+      };
 
     // combine samplers
     auto mergeSamplers = [](std::vector<Sampler> const& src, std::vector<Sampler>& dst) {
@@ -325,9 +311,6 @@ ShaderReflection::ShaderReflection(std::vector<ShaderReflectionPtr> const& stage
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void ShaderReflection::print() const {
-  ILLUSION_MESSAGE << Logger::PRINT_BOLD << "Reflection information for shader " << mName
-                   << Logger::PRINT_RESET << std::endl;
-
   ILLUSION_MESSAGE << " Stage(s): " << toString(mStages) << std::endl;
 
   auto printBuffers = [](std::string const& name, std::vector<Buffer> const& buffers) {

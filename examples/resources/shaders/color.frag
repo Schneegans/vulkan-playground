@@ -12,12 +12,17 @@
 
 layout(location = 0) out vec4 outColor;
 
-layout(push_constant, std140) uniform PushConstants {
-    mat3  transform;
-    float depth;
-    layout(offset=64) vec4 color;
-} model;
+layout(binding = 0) uniform Uniforms {
+    vec3 color;
+    float time;
+} uniforms;
+
+// layout(push_constant, std140) uniform PushConstants {
+//     mat3  transform;
+//     float depth;
+//     layout(offset=64) vec4 color;
+// } model;
 
 void main() {
-    outColor = model.color;
+    outColor = vec4(uniforms.color, 1.0);
 }

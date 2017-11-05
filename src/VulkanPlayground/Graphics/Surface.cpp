@@ -93,17 +93,11 @@ Surface::Surface(DevicePtr const& device, GLFWwindow* window)
   createFramebuffers();
   createSemaphores();
   createCommandBuffers();
-
-  uint32_t bufferSize  = sizeof(CameraUniforms);
-  mCameraUniformBuffer = mDevice->createBuffer(
-    bufferSize,
-    vk::BufferUsageFlagBits::eUniformBuffer | vk::BufferUsageFlagBits::eTransferDst,
-    vk::MemoryPropertyFlagBits::eDeviceLocal);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-FrameInfo Surface::beginFrame(CameraUniforms const& camera) {
+FrameInfo Surface::beginFrame() {
   uint32_t imageIndex;
   auto     result = mDevice->getVkDevice()->acquireNextImageKHR(
     *mSwapChain,
@@ -114,7 +108,7 @@ FrameInfo Surface::beginFrame(CameraUniforms const& camera) {
 
   if (result == vk::Result::eErrorOutOfDateKHR) {
     recreate();
-    return beginFrame(camera);
+    return beginFrame();
   }
 
   if (result != vk::Result::eSuccess && result != vk::Result::eSuboptimalKHR) {
@@ -146,9 +140,6 @@ FrameInfo Surface::beginFrame(CameraUniforms const& camera) {
   scissor.offset.x      = 0;
   scissor.offset.y      = 0;
   buffer.setScissor(0, 1, &scissor);
-
-  // update camera uniforms
-  buffer.updateBuffer(*mCameraUniformBuffer->mBuffer, 0, sizeof(CameraUniforms), (uint8_t*)&camera);
 
   return {buffer, imageIndex};
 }

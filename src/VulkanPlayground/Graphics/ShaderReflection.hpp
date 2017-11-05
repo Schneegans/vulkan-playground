@@ -56,12 +56,11 @@ class ShaderReflection {
   };
 
   // -------------------------------------------------------------------------------- public methods
-  ShaderReflection(std::string const& name, std::vector<uint32_t> const& code);
+  ShaderReflection(std::vector<uint32_t> const& code);
   ShaderReflection(std::vector<ShaderReflectionPtr> const& stages);
 
   void print() const;
 
-  std::string const&          getName() const { return mName; }
   vk::ShaderStageFlags        getStages() const { return mStages; }
   std::vector<Buffer> const&  getPushConstantBuffers() const { return mPushConstantBuffers; }
   std::vector<Buffer> const&  getUniformBuffers() const { return mUniformBuffers; }
@@ -69,7 +68,6 @@ class ShaderReflection {
 
  private:
   // ------------------------------------------------------------------------------- private members
-  std::string          mName;
   vk::ShaderStageFlags mStages;
 
   std::vector<Buffer>  mPushConstantBuffers;

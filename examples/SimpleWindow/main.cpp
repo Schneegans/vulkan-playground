@@ -18,6 +18,12 @@
 #include <VulkanPlayground/Graphics/Window.hpp>
 
 #include <iostream>
+#include <thread>
+
+struct Uniforms {
+  glm::vec3 mColor;
+  float     mTime;
+};
 
 int main(int argc, char* argv[]) {
   try {
@@ -27,16 +33,60 @@ int main(int argc, char* argv[]) {
 
     window->open(false);
 
-    std::vector<std::string> shaderModules{"data/shaders/texture.vert.spv",
-                                           "data/shaders/texture.frag.spv"};
+    auto surface{window->getSurface()};
+
+    std::vector<std::string> shaderModules{"data/shaders/color.vert.spv",
+                                           "data/shaders/color.frag.spv"};
 
     auto pipeline{std::make_shared<Illusion::Graphics::Pipeline>(
-      device, window->getSurface()->getRenderPass(), shaderModules, 10)};
+      device, surface->getRenderPass(), shaderModules, 10)};
 
     pipeline->getReflection()->print();
 
+    auto uniformBuffer = device->createBuffer(
+      sizeof(Uniforms),
+      vk::BufferUsageFlagBits::eUniformBuffer | vk::BufferUsageFlagBits::eTransferDst,
+      vk::MemoryPropertyFlagBits::eDeviceLocal);
+
+    auto descriptorSet{pipeline->allocateDescriptorSet()};
+
+    vk::DescriptorBufferInfo bufferInfo;
+    bufferInfo.buffer = *uniformBuffer->mBuffer;
+    bufferInfo.offset = 0;
+    bufferInfo.range  = sizeof(Uniforms);
+
+    vk::WriteDescriptorSet info;
+    info.dstSet          = descriptorSet;
+    info.dstBinding      = 0;
+    info.dstArrayElement = 0;
+    info.descriptorType  = vk::DescriptorType::eUniformBuffer;
+    info.descriptorCount = 1;
+    info.pBufferInfo     = &bufferInfo;
+
+    device->getVkDevice()->updateDescriptorSets(info, nullptr);
+
+    Uniforms uniforms;
+    uniforms.mColor = glm::vec3(1, 0, 0);
+    uniforms.mTime  = 0.f;
+
     while (!window->shouldClose()) {
       window->processInput();
+
+      auto frame = surface->beginFrame();
+
+      frame.mPrimaryCommandBuffer.updateBuffer(
+        *uniformBuffer->mBuffer, 0, sizeof(Uniforms), (uint8_t*)&uniforms);
+
+      pipeline->use(frame, descriptorSet);
+
+      surface->beginRenderPass(frame);
+
+      frame.mPrimaryCommandBuffer.draw(4, 1, 0, 0);
+
+      surface->endRenderPass(frame);
+      surface->endFrame(frame);
+
+      std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
   } catch (std::runtime_error const& e) { Illusion::ILLUSION_ERROR << e.what() << std::endl; }
 
