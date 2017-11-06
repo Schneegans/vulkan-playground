@@ -7,6 +7,6 @@
 [submodule "third-party/glfw"]
 	path = third-party/glfw
 	url = https://github.com/glfw/glfw
-[submodule "third-party/stb"]
-	path = third-party/stb
-	url = https://github.com/nothings/stb
+[submodule "third-party/gli"]
+	path = third-party/gli
+	url = https://github.com/g-truc/gli.git

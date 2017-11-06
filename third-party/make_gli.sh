@@ -9,8 +9,8 @@ SCRIPT_DIR="$( cd "$( dirname "$0" )" && pwd )"
 BUILD_TYPE=${1:-Release}
 
 # define locations for build and install
-CMAKE_DIR="$SCRIPT_DIR/glm"
-BUILD_DIR="$SCRIPT_DIR/build/linux/$BUILD_TYPE/glm"
+CMAKE_DIR="$SCRIPT_DIR/gli"
+BUILD_DIR="$SCRIPT_DIR/build/linux/$BUILD_TYPE/gli"
 INSTALL_DIR="$SCRIPT_DIR/install/linux/$BUILD_TYPE"
 
 # create build directory if neccessary -----------------------------------------

@@ -18,12 +18,12 @@ call third-party\make_glfw.bat Debug
 
 echo ""
 echo "-------------------------------------------------------------------------"
-echo "---------------------- Copying STB Headers ------------------------------"
+echo "------------------------- Building GLI ----------------------------------"
 echo "-------------------------------------------------------------------------"
 echo ""
-call third-party\make_stb.bat Release
+call third-party\make_gli.bat Release
 @echo off
-call third-party\make_stb.bat Debug
+call third-party\make_gli.bat Debug
 @echo off
 
 echo ""

@@ -22,11 +22,11 @@ $SCRIPT_DIR/third-party/make_glfw.sh Debug
 
 echo ""
 echo "-------------------------------------------------------------------------"
-echo "---------------------- Copying STB Headers ------------------------------"
+echo "-------------------------- Building GLI ---------------------------------"
 echo "-------------------------------------------------------------------------"
 echo ""
-$SCRIPT_DIR/third-party/make_stb.sh Release
-$SCRIPT_DIR/third-party/make_stb.sh Debug
+$SCRIPT_DIR/third-party/make_gli.sh Release
+$SCRIPT_DIR/third-party/make_gli.sh Debug
 
 echo ""
 echo "-------------------------------------------------------------------------"
