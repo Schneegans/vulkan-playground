@@ -18,8 +18,7 @@
 
 #include <GLFW/glfw3.h>
 
-#define STB_IMAGE_IMPLEMENTATION
-#include <stb_image.h>
+#include <gli/gli.hpp>
 
 #include <iostream>
 #include <set>
@@ -83,54 +82,75 @@ void Device::endSingleTimeCommands(vk::CommandBuffer commandBuffer) const {
 
 TexturePtr Device::createTexture(std::string const& fileName) const {
 
-  int      texWidth, texHeight, texChannels;
-  stbi_uc* pixels =
-    stbi_load(fileName.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
-  vk::DeviceSize imageSize = texWidth * texHeight * 4;
-
-  if (!pixels) ILLUSION_ERROR << "Failed to load texture " << fileName << "!" << std::endl;
+  gli::texture texture = gli::load(fileName);
+  if (texture.empty()) { throw std::runtime_error{"Failed to load texture " + fileName + "!"}; }
 
   auto stagingBuffer = createBuffer(
-    imageSize,
+    texture.size(),
     vk::BufferUsageFlagBits::eTransferSrc,
     vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
 
-  void* data = mVkDevice->mapMemory(*stagingBuffer->mMemory, 0, imageSize);
-  std::memcpy(data, pixels, (size_t)imageSize);
+  void* data = mVkDevice->mapMemory(*stagingBuffer->mMemory, 0, texture.size());
+  std::memcpy(data, texture.data(), texture.size());
   mVkDevice->unmapMemory(*stagingBuffer->mMemory);
 
-  stbi_image_free(pixels);
+  ILLUSION_DEBUG << "Loading texture " << fileName << std::endl;
+  ILLUSION_DEBUG << "  Format:  " << vk::to_string((vk::Format)texture.format()) << std::endl;
+  ILLUSION_DEBUG << "  Size:    " << texture.extent().x << "x" << texture.extent().y << std::endl;
+  ILLUSION_DEBUG << "  MipMaps: " << texture.levels() << std::endl;
 
   auto result = createTexture(
-    texWidth,
-    texHeight,
-    vk::Format::eR8G8B8A8Unorm,
+    texture.extent().x,
+    texture.extent().y,
+    texture.levels(),
+    (vk::Format)texture.format(),
     vk::ImageTiling::eOptimal,
     vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst,
     vk::MemoryPropertyFlagBits::eDeviceLocal);
 
+  vk::ImageSubresourceRange subresourceRange;
+  subresourceRange.aspectMask   = vk::ImageAspectFlagBits::eColor;
+  subresourceRange.baseMipLevel = 0;
+  subresourceRange.levelCount   = texture.levels();
+  subresourceRange.layerCount   = 1;
+
   transitionImageLayout(
-    result->mImage, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
+    result->mImage,
+    vk::ImageLayout::eUndefined,
+    vk::ImageLayout::eTransferDstOptimal,
+    subresourceRange);
 
   auto buffer = beginSingleTimeCommands();
 
-  vk::BufferImageCopy info;
-  info.imageSubresource.aspectMask     = vk::ImageAspectFlagBits::eColor;
-  info.imageSubresource.mipLevel       = 0;
-  info.imageSubresource.baseArrayLayer = 0;
-  info.imageSubresource.layerCount     = 1;
-  info.imageExtent.width               = texWidth;
-  info.imageExtent.height              = texHeight;
-  info.imageExtent.depth               = 1;
-  info.imageOffset.z                   = 0;
+  std::vector<vk::BufferImageCopy> infos;
+  uint32_t                         offset = 0;
+
+  for (uint32_t i = 0; i < texture.levels(); ++i) {
+    vk::BufferImageCopy info;
+    info.imageSubresource.aspectMask     = vk::ImageAspectFlagBits::eColor;
+    info.imageSubresource.mipLevel       = i;
+    info.imageSubresource.baseArrayLayer = 0;
+    info.imageSubresource.layerCount     = 1;
+    info.imageExtent.width               = texture.extent(i).x;
+    info.imageExtent.height              = texture.extent(i).y;
+    info.imageExtent.depth               = 1;
+    info.bufferOffset                    = offset;
+
+    infos.push_back(info);
+
+    offset += static_cast<uint32_t>(texture.size(i));
+  }
 
   buffer.copyBufferToImage(
-    *stagingBuffer->mBuffer, *result->mImage, vk::ImageLayout::eTransferDstOptimal, info);
+    *stagingBuffer->mBuffer, *result->mImage, vk::ImageLayout::eTransferDstOptimal, infos);
 
   endSingleTimeCommands(buffer);
 
   transitionImageLayout(
-    result->mImage, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
+    result->mImage,
+    vk::ImageLayout::eTransferDstOptimal,
+    vk::ImageLayout::eShaderReadOnlyOptimal,
+    subresourceRange);
 
   return result;
 }
@@ -140,11 +160,12 @@ TexturePtr Device::createTexture(std::string const& fileName) const {
 TexturePtr Device::createTexture(
   uint32_t                width,
   uint32_t                height,
+  uint32_t                levels,
   vk::Format              format,
   vk::ImageTiling         tiling,
   vk::ImageUsageFlags     usage,
   vk::MemoryPropertyFlags properties) const {
-  auto image = createImage(width, height, format, tiling, usage, properties);
+  auto image = createImage(width, height, levels, format, tiling, usage, properties);
 
   auto result     = std::make_shared<Texture>();
   result->mImage  = image->mImage;
@@ -154,10 +175,10 @@ TexturePtr Device::createTexture(
     vk::ImageViewCreateInfo info;
     info.image                           = *image->mImage;
     info.viewType                        = vk::ImageViewType::e2D;
-    info.format                          = vk::Format::eR8G8B8A8Unorm;
+    info.format                          = format;
     info.subresourceRange.aspectMask     = vk::ImageAspectFlagBits::eColor;
     info.subresourceRange.baseMipLevel   = 0;
-    info.subresourceRange.levelCount     = 1;
+    info.subresourceRange.levelCount     = levels;
     info.subresourceRange.baseArrayLayer = 0;
     info.subresourceRange.layerCount     = 1;
 
@@ -180,7 +201,7 @@ TexturePtr Device::createTexture(
     info.mipmapMode              = vk::SamplerMipmapMode::eLinear;
     info.mipLodBias              = 0.0f;
     info.minLod                  = 0.0f;
-    info.maxLod                  = 0.0f;
+    info.maxLod                  = levels;
 
     result->mSampler = createVkSampler(info);
   }
@@ -193,6 +214,7 @@ TexturePtr Device::createTexture(
 ImagePtr Device::createImage(
   uint32_t                width,
   uint32_t                height,
+  uint32_t                levels,
   vk::Format              format,
   vk::ImageTiling         tiling,
   vk::ImageUsageFlags     usage,
@@ -203,11 +225,11 @@ ImagePtr Device::createImage(
   info.extent.width  = width;
   info.extent.height = height;
   info.extent.depth  = 1;
-  info.mipLevels     = 1;
+  info.mipLevels     = levels;
   info.arrayLayers   = 1;
   info.format        = format;
   info.tiling        = tiling;
-  info.initialLayout = vk::ImageLayout::ePreinitialized;
+  info.initialLayout = vk::ImageLayout::eUndefined;
   info.usage         = usage;
   info.sharingMode   = vk::SharingMode::eExclusive;
   info.samples       = vk::SampleCountFlagBits::e1;
@@ -444,21 +466,20 @@ BufferPtr Device::createBuffer(
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void Device::transitionImageLayout(
-  VkImagePtr& image, vk::ImageLayout oldLayout, vk::ImageLayout newLayout) const {
+  VkImagePtr&               image,
+  vk::ImageLayout           oldLayout,
+  vk::ImageLayout           newLayout,
+  vk::ImageSubresourceRange subresourceRange) const {
 
   vk::CommandBuffer commandBuffer = beginSingleTimeCommands();
 
   vk::ImageMemoryBarrier barrier;
-  barrier.oldLayout                       = oldLayout;
-  barrier.newLayout                       = newLayout;
-  barrier.srcQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
-  barrier.dstQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
-  barrier.image                           = *image;
-  barrier.subresourceRange.aspectMask     = vk::ImageAspectFlagBits::eColor;
-  barrier.subresourceRange.baseMipLevel   = 0;
-  barrier.subresourceRange.levelCount     = 1;
-  barrier.subresourceRange.baseArrayLayer = 0;
-  barrier.subresourceRange.layerCount     = 1;
+  barrier.oldLayout           = oldLayout;
+  barrier.newLayout           = newLayout;
+  barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  barrier.image               = *image;
+  barrier.subresourceRange    = subresourceRange;
 
   vk::PipelineStageFlags sourceStage;
   vk::PipelineStageFlags destinationStage;

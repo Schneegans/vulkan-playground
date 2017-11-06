@@ -43,7 +43,7 @@ int main(int argc, char* argv[]) {
 
     pipeline->getReflection()->print();
 
-    auto texture = device->createTexture("data/textures/test.png");
+    auto texture = device->createTexture("data/textures/box.dds");
 
     auto uniformBuffer = device->createBuffer(
       sizeof(Uniforms),

@@ -52,6 +52,7 @@ class Device {
   TexturePtr createTexture(
     uint32_t                width,
     uint32_t                height,
+    uint32_t                levels,
     vk::Format              format,
     vk::ImageTiling         tiling,
     vk::ImageUsageFlags     usage,
@@ -60,6 +61,7 @@ class Device {
   ImagePtr createImage(
     uint32_t                width,
     uint32_t                height,
+    uint32_t                levels,
     vk::Format              format,
     vk::ImageTiling         tiling,
     vk::ImageUsageFlags     usage,
@@ -87,7 +89,10 @@ class Device {
   VkSwapchainKHRPtr   createVkSwapChainKhr(vk::SwapchainCreateInfoKHR const&) const;
 
   void transitionImageLayout(
-    VkImagePtr& image, vk::ImageLayout oldLayout, vk::ImageLayout newLayout) const;
+    VkImagePtr&     image,
+    vk::ImageLayout oldLayout,
+    vk::ImageLayout newLayout,
+    vk::ImageSubresourceRange) const;
 
   InstancePtr const& getInstance() const { return mInstance; }
 
