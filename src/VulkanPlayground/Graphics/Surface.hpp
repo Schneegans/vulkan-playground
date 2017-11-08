@@ -14,8 +14,6 @@
 // ---------------------------------------------------------------------------------------- includes
 #include "Device.hpp"
 
-#include <glm/glm.hpp>
-
 struct GLFWwindow;
 
 namespace Illusion {

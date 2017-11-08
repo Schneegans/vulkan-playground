@@ -10,6 +10,7 @@
 
 set(ENABLED_EXAMPLES
   "SimpleWindow"
+  "HeaderGenerator"
 )
 
 # -------------------------------------------------------------------------------- make each example

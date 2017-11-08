@@ -17,6 +17,8 @@
 #include <VulkanPlayground/Graphics/Surface.hpp>
 #include <VulkanPlayground/Graphics/Window.hpp>
 
+#include <glm/glm.hpp>
+
 #include <iostream>
 #include <thread>
 
@@ -41,7 +43,7 @@ int main(int argc, char* argv[]) {
     auto pipeline{std::make_shared<Illusion::Graphics::Pipeline>(
       device, surface->getRenderPass(), shaderModules, 10)};
 
-    pipeline->getReflection()->print();
+    std::cout << pipeline->getReflection()->toInfoString() << std::endl;
 
     auto texture = device->createTexture("data/textures/box.dds");
 
