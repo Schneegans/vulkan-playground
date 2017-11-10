@@ -21,9 +21,6 @@ set(VERSION_MINOR 1)
 set(VERSION_PATCH 0)
 
 # -------------------------------------------------------------------------------- find dependencies
-set(VULKAN_SDK "${CMAKE_SOURCE_DIR}/../../vulkan/x86_64" CACHE PATH
-    "The directory where vulkan has been installed to")
-
 if (UNIX)
   set(THIRD_PARTY_DIR_RELEASE "${CMAKE_SOURCE_DIR}/third-party/install/linux/Release")
   set(THIRD_PARTY_DIR_DEBUG "${CMAKE_SOURCE_DIR}/third-party/install/linux/Debug")
@@ -58,7 +55,7 @@ if (UNIX)
     optimized "${THIRD_PARTY_DIR_RELEASE}/lib/libglfw3.a"
     debug "${THIRD_PARTY_DIR_DEBUG}/lib/libglfw3.a"
     "${X11_LIBRARIES}"
-    "dl" "z" "ssl" "crypto" "sndio" "pthread"
+    "dl" "z" "pthread"
   )
 else ()
   set(LIBRARIES

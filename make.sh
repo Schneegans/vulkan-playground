@@ -45,17 +45,4 @@ cd $BUILD_DIR
 cmake -DCMAKE_INSTALL_PREFIX=$INSTALL_DIR -DCMAKE_BUILD_TYPE=$BUILD_TYPE $CMAKE_DIR
 
 # compile if requested
-if [[ " ${ARGS[@]} " =~ "Build" ]]; then
-    make -j8
-fi
-
-# create documentation if requested
-if [[ " ${ARGS[@]} " =~ "Doc" ]]; then
-    make doc
-fi
-
-# install files
-if [[ " ${ARGS[@]} " =~ "Install" ]]; then
-    make install
-fi
-
+make -j install

@@ -8,9 +8,7 @@
 #                                                                                                  #
 #--------------------------------------------------------------------------------------------------#
 
-set(_VULKAN_SDK "")
 if(VULKAN_SDK AND IS_DIRECTORY "${VULKAN_SDK}")
-  set(_VULKAN_SDK "${VULKAN_SDK}")
   set(_VULKAN_SDK_EXPLICIT 1)
 else()
   set(_ENV_VULKAN_SDK "")
@@ -18,7 +16,7 @@ else()
     file(TO_CMAKE_PATH "$ENV{VULKAN_SDK}" _ENV_VULKAN_SDK)
   endif()
   if(_ENV_VULKAN_SDK AND IS_DIRECTORY "${_ENV_VULKAN_SDK}")
-    set(_VULKAN_SDK "${_ENV_VULKAN_SDK}")
+    set(VULKAN_SDK "${_ENV_VULKAN_SDK}")
     set(_VULKAN_SDK_EXPLICIT 1)
   endif()
   unset(_ENV_VULKAN_SDK)
