@@ -19,12 +19,31 @@ namespace Illusion {
 namespace Graphics {
 namespace {
 
-class MyCompiler : public spirv_cross::Compiler {
+class MyCompiler : public spirv_cross::CompilerGLSL {
  public:
   MyCompiler(std::vector<uint32_t> const& ir)
-    : spirv_cross::Compiler(ir) {}
+    : spirv_cross::CompilerGLSL(ir) {}
+
   std::vector<spirv_cross::Meta> const&    getMeta() const { return meta; }
   std::vector<spirv_cross::Variant> const& getIDs() const { return ids; }
+
+  ShaderReflection::Buffer::PackingStandard getPackingStandard(spirv_cross::SPIRType const& type) {
+    if (buffer_is_packing_standard(type, spirv_cross::BufferPackingStandard::BufferPackingStd140))
+      return ShaderReflection::Buffer::PackingStandard::eStd140;
+
+    if (buffer_is_packing_standard(type, spirv_cross::BufferPackingStandard::BufferPackingStd430))
+      return ShaderReflection::Buffer::PackingStandard::eStd430;
+
+    if (buffer_is_packing_standard(
+          type, spirv_cross::BufferPackingStandard::BufferPackingStd140EnhancedLayout))
+      return ShaderReflection::Buffer::PackingStandard::eStd140EnhancedLayout;
+
+    if (buffer_is_packing_standard(
+          type, spirv_cross::BufferPackingStandard::BufferPackingStd430EnhancedLayout))
+      return ShaderReflection::Buffer::PackingStandard::eStd430EnhancedLayout;
+
+    throw std::runtime_error{"Unsupported shader buffer layout!"};
+  }
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -171,10 +190,12 @@ ShaderReflection::ShaderReflection(std::vector<uint32_t> const& code) {
       Buffer buffer;
       auto   type = parser.get_type(resource.type_id);
 
-      buffer.mName    = parser.get_name(resource.id);
-      buffer.mType    = parser.get_name(resource.base_type_id);
-      buffer.mSize    = parser.get_declared_struct_size(type);
-      buffer.mBinding = parser.get_decoration(resource.id, spv::DecorationBinding);
+      buffer.mName            = parser.get_name(resource.id);
+      buffer.mType            = parser.get_name(resource.base_type_id);
+      buffer.mSize            = parser.get_declared_struct_size(type);
+      buffer.mBinding         = parser.get_decoration(resource.id, spv::DecorationBinding);
+      buffer.mPackingStandard = parser.getPackingStandard(type);
+
       if (activeVariables.find(resource.id) != activeVariables.end()) {
         buffer.mActiveStages = mStages;
       }
@@ -524,18 +545,32 @@ std::string ShaderReflection::Type::getCppType() const {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+std::string ShaderReflection::Buffer::getPackingStandard() const {
+  switch (mPackingStandard) {
+  case PackingStandard::eStd140:
+    return "std140";
+  case PackingStandard::eStd140EnhancedLayout:
+    return "std140enhancedlayout";
+  case PackingStandard::eStd430:
+    return "std430";
+  case PackingStandard::eStd430EnhancedLayout:
+    return "std430enhancedlayout";
+  }
+
+  return "";
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 std::string ShaderReflection::Buffer::toInfoString(uint32_t indent) const {
   std::stringstream sstr;
   std::string       spaces(indent, ' ');
-  sstr << spaces << " - " << mType << " " << mName << " (Stages: " << toString(mActiveStages) << ")"
-       << std::endl;
+  sstr << spaces << " - " << mType << " " << mName << " (Stages: " << toString(mActiveStages)
+       << ", Layout: " << getPackingStandard() << ")" << std::endl;
   sstr << spaces << "   Size:     " << mSize << std::endl;
   sstr << spaces << "   Binding:  " << mBinding << std::endl;
 
   for (auto const& range : mRanges) {
-    // if (range.mType == BufferRange::Type::eStruct) {
-
-    // } else {
     sstr << spaces << " - " << range.mType.getInfoType() << " " << range.mName
          << range.mType.getArrayPostfix() << " (Stages: " << toString(range.mActiveStages) << ")"
          << std::endl;
@@ -546,7 +581,6 @@ std::string ShaderReflection::Buffer::toInfoString(uint32_t indent) const {
       sstr << spaces << "     ArrayStride:  " << range.mType.mArrayStride << std::endl;
     if (range.mType.mMatrixStride > 0)
       sstr << spaces << "     MatrixStride: " << range.mType.mMatrixStride << std::endl;
-    // }
   }
 
   return sstr.str();
@@ -615,6 +649,7 @@ std::string ShaderReflection::Struct::toInfoString(uint32_t indent) const {
     if (type.second.mMatrixStride > 0)
       sstr << spaces << "     MatrixStride: " << type.second.mMatrixStride << std::endl;
   }
+  return sstr.str();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -624,19 +659,20 @@ std::string ShaderReflection::Struct::toCppString(uint32_t indent) const {
   std::string       spaces(indent, ' ');
   sstr << spaces << "struct " << mName << " {" << std::endl;
 
-  uint32_t paddingCounter{0};
+  // uint32_t paddingCounter{0};
 
-  for (size_t i{0}; i < mRanges.size(); ++i) {
-    sstr << spaces << "  " << mRanges[i].mType.getCppType() << " " << mRanges[i].mName
-         << mRanges[i].mType.getArrayPostfix() << ";" << std::endl;
+  for (size_t i{0}; i < mMembers.size(); ++i) {
+    sstr << spaces << " - " << mMembers[i].second.getInfoType() << " " << mMembers[i].first
+         << mMembers[i].second.getArrayPostfix() << std::endl;
 
-    uint32_t nextOffset{i < mRanges.size() - 1 ? mRanges[i + 1].mOffset : mSize};
-    uint64_t requiredPadding{(nextOffset - mRanges[i].mOffset - mRanges[i].mSize) / sizeof(float)};
+    // uint32_t nextOffset{i < mMembers.size() - 1 ? mMembers[i + 1].mOffset : mSize};
+    // uint64_t requiredPadding{(nextOffset - mMembers[i].mOffset - mMembers[i].mSize) /
+    //                          sizeof(float)};
 
-    while (requiredPadding > 0) {
-      sstr << spaces << "  float _padding" << ++paddingCounter << ";" << std::endl;
-      --requiredPadding;
-    }
+    // while (requiredPadding > 0) {
+    //   sstr << spaces << "  float _padding" << ++paddingCounter << ";" << std::endl;
+    //   --requiredPadding;
+    // }
   }
 
   sstr << spaces << "};" << std::endl;

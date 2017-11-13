@@ -31,6 +31,7 @@ class ShaderReflection {
 
  public:
   // -------------------------------------------------------------------------------- public classes
+
   struct Type {
     enum class BaseType { eUnknown, eInt, eUInt, eFloat, eDouble, eStruct };
 
@@ -82,13 +83,18 @@ class ShaderReflection {
   };
 
   struct Buffer {
+    enum class PackingStandard { eStd140, eStd430, eStd140EnhancedLayout, eStd430EnhancedLayout };
+
     std::string          mName;
     std::string          mType;
     uint32_t             mSize{0};
     uint32_t             mBinding{0};
     vk::ShaderStageFlags mActiveStages;
+    PackingStandard      mPackingStandard{PackingStandard::eStd140};
 
     std::vector<BufferRange> mRanges;
+
+    std::string getPackingStandard() const;
 
     std::string toInfoString(uint32_t indent = 0) const;
     std::string toCppString(uint32_t indent = 0) const;
@@ -106,6 +112,7 @@ class ShaderReflection {
   struct Struct {
     std::string mName;
     uint32_t    mSize{0};
+
     std::vector<std::pair<std::string, Type>> mMembers;
 
     std::string toInfoString(uint32_t indent = 0) const;
