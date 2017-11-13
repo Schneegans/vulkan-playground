@@ -31,15 +31,13 @@ class ShaderReflection {
 
  public:
   // -------------------------------------------------------------------------------- public classes
-  struct BufferRange {
-    enum class Type { eUnknown, eInt, eUInt, eFloat, eDouble, eStruct };
+  struct Type {
+    enum class BaseType { eUnknown, eInt, eUInt, eFloat, eDouble, eStruct };
 
-    Type                 mType;
-    std::string          mName;
-    uint32_t             mSize{0};
-    uint32_t             mOffset{0};
-    uint32_t             mBaseSize{0};
-    vk::ShaderStageFlags mActiveStages;
+    BaseType mBaseType{BaseType::eUnknown};
+
+    // size of one element, in bytes
+    uint32_t mBaseSize{0};
 
     // if larger than one, its a vec type
     uint32_t mElements{1};
@@ -54,15 +52,33 @@ class ShaderReflection {
     uint32_t              mArrayStride{0};
 
     // only set if mType is eStruct
-    std::string              mTypeName;
-    std::vector<BufferRange> mRanges;
+    std::string       mTypeName;
+    std::vector<Type> mMembers;
 
     uint32_t    getBaseSize() const;
     std::string getTypePrefix() const;
     std::string getElementsPostfix() const;
     std::string getArrayPostfix() const;
+
     std::string getInfoType() const;
     std::string getCppType() const;
+
+    bool operator==(Type const& other) const {
+      return mBaseType == other.mBaseType && mBaseSize == other.mBaseSize &&
+             mElements == other.mElements && mColumns == other.mColumns && mRows == other.mRows &&
+             mMatrixStride == other.mMatrixStride && mArrayLengths == other.mArrayLengths &&
+             mArrayStride == other.mArrayStride && mTypeName == other.mTypeName &&
+             mMembers == other.mMembers;
+    }
+    bool operator!=(Type const& other) const { return !(*this == other); }
+  };
+
+  struct BufferRange {
+    Type                 mType;
+    std::string          mName;
+    uint32_t             mSize{0};
+    uint32_t             mOffset{0};
+    vk::ShaderStageFlags mActiveStages;
   };
 
   struct Buffer {
@@ -87,6 +103,15 @@ class ShaderReflection {
     std::string toCppString(uint32_t indent = 0) const;
   };
 
+  struct Struct {
+    std::string mName;
+    uint32_t    mSize{0};
+    std::vector<std::pair<std::string, Type>> mMembers;
+
+    std::string toInfoString(uint32_t indent = 0) const;
+    std::string toCppString(uint32_t indent = 0) const;
+  };
+
   enum class BufferType { ePushConstant, eUniform };
 
   // -------------------------------------------------------------------------------- public methods
@@ -100,6 +125,7 @@ class ShaderReflection {
   vk::ShaderStageFlags       getStages() const { return mStages; }
   std::vector<Buffer> const& getBuffers(BufferType type) const;
   std::vector<Sampler> const& getSamplers() const { return mSamplers; }
+  std::vector<Struct> const&  getStructs() const { return mStructs; }
 
  private:
   // ------------------------------------------------------------------------------- private members
@@ -108,6 +134,7 @@ class ShaderReflection {
   std::vector<Buffer>  mPushConstantBuffers;
   std::vector<Buffer>  mUniformBuffers;
   std::vector<Sampler> mSamplers;
+  std::vector<Struct>  mStructs;
 };
 }
 }

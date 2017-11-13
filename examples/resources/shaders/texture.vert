@@ -27,12 +27,12 @@ layout(push_constant, std430) uniform PushConstants {
     mat3 pos2[2];
     float color2[3];
     vec3 pos3[2];
-    Foo bar;
 } pushConstants;
 
 layout(binding = 0, std140) uniform Uniforms {
     bool color;
     vec3 time2[13];
+    Foo bar[10];
 } uniforms[2];
 
 layout(location = 0) out vec2 fragTexCoord;
