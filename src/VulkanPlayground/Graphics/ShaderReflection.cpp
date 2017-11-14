@@ -26,24 +26,6 @@ class MyCompiler : public spirv_cross::CompilerGLSL {
 
   std::vector<spirv_cross::Meta> const&    getMeta() const { return meta; }
   std::vector<spirv_cross::Variant> const& getIDs() const { return ids; }
-
-  ShaderReflection::Buffer::PackingStandard getPackingStandard(spirv_cross::SPIRType const& type) {
-    if (buffer_is_packing_standard(type, spirv_cross::BufferPackingStandard::BufferPackingStd140))
-      return ShaderReflection::Buffer::PackingStandard::eStd140;
-
-    if (buffer_is_packing_standard(type, spirv_cross::BufferPackingStandard::BufferPackingStd430))
-      return ShaderReflection::Buffer::PackingStandard::eStd430;
-
-    if (buffer_is_packing_standard(
-          type, spirv_cross::BufferPackingStandard::BufferPackingStd140EnhancedLayout))
-      return ShaderReflection::Buffer::PackingStandard::eStd140EnhancedLayout;
-
-    if (buffer_is_packing_standard(
-          type, spirv_cross::BufferPackingStandard::BufferPackingStd430EnhancedLayout))
-      return ShaderReflection::Buffer::PackingStandard::eStd430EnhancedLayout;
-
-    throw std::runtime_error{"Unsupported shader buffer layout!"};
-  }
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -72,21 +54,21 @@ std::string toString(vk::ShaderStageFlags stages) {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-ShaderReflection::Type::BaseType convert(spirv_cross::SPIRType type) {
+ShaderReflection::BufferRange::BaseType convert(spirv_cross::SPIRType type) {
   switch (type.basetype) {
   case spirv_cross::SPIRType::Int:
-    return ShaderReflection::Type::BaseType::eInt;
+    return ShaderReflection::BufferRange::BaseType::eInt;
   case spirv_cross::SPIRType::Boolean:
   case spirv_cross::SPIRType::UInt:
-    return ShaderReflection::Type::BaseType::eUInt;
+    return ShaderReflection::BufferRange::BaseType::eUInt;
   case spirv_cross::SPIRType::Float:
-    return ShaderReflection::Type::BaseType::eFloat;
+    return ShaderReflection::BufferRange::BaseType::eFloat;
   case spirv_cross::SPIRType::Double:
-    return ShaderReflection::Type::BaseType::eDouble;
+    return ShaderReflection::BufferRange::BaseType::eDouble;
   case spirv_cross::SPIRType::Struct:
-    return ShaderReflection::Type::BaseType::eStruct;
+    return ShaderReflection::BufferRange::BaseType::eStruct;
   default:
-    return ShaderReflection::Type::BaseType::eUnknown;
+    return ShaderReflection::BufferRange::BaseType::eUnknown;
   }
 }
 
@@ -133,55 +115,55 @@ ShaderReflection::ShaderReflection(std::vector<uint32_t> const& code) {
   // }
 
   // collect buffers -------------------------------------------------------------------------------
-  auto getBufferRanges = [&](spirv_cross::Resource const& resource) {
-    std::vector<BufferRange> result;
-    auto                     type = parser.get_type(resource.type_id);
-    auto                     activeMembers{parser.get_active_buffer_ranges(resource.id)};
+  std::function<std::vector<BufferRange>(uint32_t, std::vector<spirv_cross::BufferRange> const&)>
+    getBufferRanges =
+      [&](uint32_t typeID, std::vector<spirv_cross::BufferRange> const& activeRanges) {
+        std::vector<BufferRange> ranges;
 
-    for (size_t i{0}; i < type.member_types.size(); ++i) {
-      BufferRange range;
-      auto        memberType = parser.get_type(type.member_types[i]);
+        auto type = parser.get_type(typeID);
 
-      range.mName   = parser.get_member_name(resource.base_type_id, i);
-      range.mSize   = parser.get_declared_struct_member_size(type, i);
-      range.mOffset = parser.type_struct_member_offset(type, i);
+        for (size_t i{0}; i < type.member_types.size(); ++i) {
+          BufferRange range;
+          auto        memberType = parser.get_type(type.member_types[i]);
 
-      for (auto const& activeMember : activeMembers) {
-        if (activeMember.index == i) { range.mActiveStages = mStages; }
-      }
+          range.mName   = parser.get_member_name(type.self, i);
+          range.mSize   = parser.get_declared_struct_member_size(type, i);
+          range.mOffset = parser.type_struct_member_offset(type, i);
 
-      range.mType.mBaseType = convert(memberType);
-      range.mType.mBaseSize = memberType.width / 8;
+          for (auto const& activeRange : activeRanges) {
+            if (activeRange.index == i) { range.mActiveStages = mStages; }
+          }
 
-      // vector types
-      range.mType.mElements = memberType.vecsize;
+          range.mBaseType = convert(memberType);
+          range.mBaseSize = memberType.width / 8;
 
-      // matrix types
-      if (parser.has_member_decoration(
-            resource.base_type_id, i, spv::Decoration::DecorationMatrixStride)) {
-        range.mType.mColumns      = memberType.columns;
-        range.mType.mRows         = memberType.vecsize;
-        range.mType.mMatrixStride = parser.type_struct_member_matrix_stride(type, i);
-      }
+          // vector types
+          range.mElements = memberType.vecsize;
 
-      // array types
-      if (!memberType.array.empty()) {
-        range.mType.mArrayLengths = memberType.array;
-        range.mType.mArrayStride  = parser.type_struct_member_array_stride(type, i);
-      }
+          // matrix types
+          if (parser.has_member_decoration(type.self, i, spv::Decoration::DecorationMatrixStride)) {
+            range.mColumns      = memberType.columns;
+            range.mRows         = memberType.vecsize;
+            range.mMatrixStride = parser.type_struct_member_matrix_stride(type, i);
+          }
 
-      // struct types
-      if (range.mType.mBaseType == Type::BaseType::eStruct) {
-        range.mType.mTypeName = parser.get_name(type.member_types[i]);
-        Illusion::ILLUSION_MESSAGE << "FOOOOOOOOOO " << range.mType.mTypeName << std::endl;
-        // range.mType.mRanges = getBufferRanges(structResource);
-      }
+          // array types
+          if (!memberType.array.empty()) {
+            range.mArrayLengths = memberType.array;
+            range.mArrayStride  = parser.type_struct_member_array_stride(type, i);
+          }
 
-      result.push_back(range);
-    }
+          // struct types
+          if (range.mBaseType == BufferRange::BaseType::eStruct) {
+            range.mTypeName = parser.get_name(memberType.self);
+            range.mMembers  = getBufferRanges(type.member_types[i], {});
+          }
 
-    return result;
-  };
+          ranges.push_back(range);
+        }
+
+        return ranges;
+      };
 
   auto getBuffers = [&](std::vector<spirv_cross::Resource> const& resources) {
     std::vector<Buffer> result;
@@ -190,17 +172,21 @@ ShaderReflection::ShaderReflection(std::vector<uint32_t> const& code) {
       Buffer buffer;
       auto   type = parser.get_type(resource.type_id);
 
-      buffer.mName            = parser.get_name(resource.id);
-      buffer.mType            = parser.get_name(resource.base_type_id);
-      buffer.mSize            = parser.get_declared_struct_size(type);
-      buffer.mBinding         = parser.get_decoration(resource.id, spv::DecorationBinding);
-      buffer.mPackingStandard = parser.getPackingStandard(type);
+      buffer.mName    = parser.get_name(resource.id);
+      buffer.mType    = parser.get_name(resource.base_type_id);
+      buffer.mSize    = parser.get_declared_struct_size(type);
+      buffer.mBinding = parser.get_decoration(resource.id, spv::DecorationBinding);
+      buffer.mSet     = parser.get_decoration(resource.id, spv::DecorationDescriptorSet);
 
       if (activeVariables.find(resource.id) != activeVariables.end()) {
         buffer.mActiveStages = mStages;
       }
 
-      buffer.mRanges = getBufferRanges(resource);
+      Illusion::ILLUSION_MESSAGE << buffer.mName << ": " << resource.type_id << std::endl;
+
+      auto activeMembers{parser.get_active_buffer_ranges(resource.id)};
+
+      buffer.mRanges = getBufferRanges(resource.type_id, activeMembers);
 
       result.push_back(buffer);
     }
@@ -269,7 +255,7 @@ ShaderReflection::ShaderReflection(std::vector<ShaderReflectionPtr> const& stage
           for (auto& dstBuffer : dstBuffers) {
 
             // there is already a buffer at this binding point
-            if (srcBuffer.mBinding == dstBuffer.mBinding) {
+            if (srcBuffer.mBinding == dstBuffer.mBinding && srcBuffer.mSet == dstBuffer.mSet) {
 
               // check if they have the same type
               if (srcBuffer.mType != dstBuffer.mType) {
@@ -289,25 +275,10 @@ ShaderReflection::ShaderReflection(std::vector<ShaderReflectionPtr> const& stage
                                          std::to_string(dstBuffer.mBinding) + " do not match!"};
               }
 
+              // check if they have the same ranges
               for (size_t i{0}; i < srcBuffer.mRanges.size(); ++i) {
-                // check if they have the same type
-                if (srcBuffer.mRanges[i].mType != dstBuffer.mRanges[i].mType) {
-                  throw std::runtime_error{"Types of Range #" + std::to_string(i) +
-                                           " of Buffer at binding point " +
-                                           std::to_string(dstBuffer.mBinding) + " do not match!"};
-                }
-
-                // check if they have the same size
-                if (srcBuffer.mRanges[i].mSize != dstBuffer.mRanges[i].mSize) {
-                  throw std::runtime_error{"Sizes of Range #" + std::to_string(i) + " of Buffer " +
-                                           dstBuffer.mType + " at binding point " +
-                                           std::to_string(dstBuffer.mBinding) + " do not match!"};
-                }
-
-                // check if they have the same offsets
-                if (srcBuffer.mRanges[i].mOffset != dstBuffer.mRanges[i].mOffset) {
-                  throw std::runtime_error{"Offsets of Range #" + std::to_string(i) +
-                                           " of Buffer " + dstBuffer.mType + " at binding point " +
+                if (srcBuffer.mRanges[i] != dstBuffer.mRanges[i]) {
+                  throw std::runtime_error{"Ranges of Buffers at binding point " +
                                            std::to_string(dstBuffer.mBinding) + " do not match!"};
                 }
 
@@ -414,14 +385,14 @@ ShaderReflection::getBuffers(ShaderReflection::BufferType type) const {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-uint32_t ShaderReflection::Type::getBaseSize() const {
+uint32_t ShaderReflection::BufferRange::getBaseSize() const {
   if (mColumns > 1 && mRows > 1) return mColumns * mRows * mBaseSize;
   return mElements * mBaseSize;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-std::string ShaderReflection::Type::getTypePrefix() const {
+std::string ShaderReflection::BufferRange::getTypePrefix() const {
   if (mElements == 1) return "";
 
   switch (mBaseType) {
@@ -438,7 +409,7 @@ std::string ShaderReflection::Type::getTypePrefix() const {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-std::string ShaderReflection::Type::getElementsPostfix() const {
+std::string ShaderReflection::BufferRange::getElementsPostfix() const {
   if (mColumns > 1 && mRows > 1) {
     if (mColumns == mRows) return std::to_string(mColumns);
     return std::to_string(mColumns) + "x" + std::to_string(mRows);
@@ -451,7 +422,7 @@ std::string ShaderReflection::Type::getElementsPostfix() const {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-std::string ShaderReflection::Type::getArrayPostfix() const {
+std::string ShaderReflection::BufferRange::getArrayPostfix() const {
   std::string result;
 
   for (int i = mArrayLengths.size() - 1; i >= 0; --i) {
@@ -463,7 +434,7 @@ std::string ShaderReflection::Type::getArrayPostfix() const {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-std::string ShaderReflection::Type::getInfoType() const {
+std::string ShaderReflection::BufferRange::getInfoType() const {
   if (mColumns > 1 && mRows > 1) return getTypePrefix() + "mat" + getElementsPostfix();
   if (mElements > 1) return getTypePrefix() + "vec" + getElementsPostfix();
 
@@ -485,7 +456,7 @@ std::string ShaderReflection::Type::getInfoType() const {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-std::string ShaderReflection::Type::getCppType() const {
+std::string ShaderReflection::BufferRange::getCppType() const {
 
   // It can be necessary that the cpp is a bit larger than the spirv type when padding is required.
   // Therefore we create a copy and modify it in such a way that a padding rules are fullfilled.
@@ -495,7 +466,7 @@ std::string ShaderReflection::Type::getCppType() const {
     // First modification can be neccessary when the matrix stride is larger than the row count. In
     // this case we should use the matrix stride value instead
     if (mColumns > 1 && mRows > 1 && mRows < mMatrixStride / mBaseSize) {
-      Type copy{*this};
+      BufferRange copy{*this};
       copy.mRows = copy.mMatrixStride / copy.mBaseSize;
       return copy.getCppType();
     }
@@ -503,7 +474,7 @@ std::string ShaderReflection::Type::getCppType() const {
     // Next modification should occur when base type array elements are smaller than the array
     // stride. In this case we should use a larger glm type to fill the padding.
     if (getBaseSize() < mArrayStride) {
-      Type copy{*this};
+      BufferRange copy{*this};
 
       // Matrix types should increase the column count accordingly
       if (mColumns > 1 && mRows > 1) {
@@ -524,8 +495,6 @@ std::string ShaderReflection::Type::getCppType() const {
   }
   if (mElements > 1) { return "glm::" + getTypePrefix() + "vec" + getElementsPostfix(); }
 
-  // For structs, continue recursively.
-
   // For base types, return the C++ equivavlent.
   switch (mBaseType) {
   case BaseType::eInt:
@@ -545,42 +514,37 @@ std::string ShaderReflection::Type::getCppType() const {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-std::string ShaderReflection::Buffer::getPackingStandard() const {
-  switch (mPackingStandard) {
-  case PackingStandard::eStd140:
-    return "std140";
-  case PackingStandard::eStd140EnhancedLayout:
-    return "std140enhancedlayout";
-  case PackingStandard::eStd430:
-    return "std430";
-  case PackingStandard::eStd430EnhancedLayout:
-    return "std430enhancedlayout";
-  }
-
-  return "";
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-std::string ShaderReflection::Buffer::toInfoString(uint32_t indent) const {
+std::string ShaderReflection::Buffer::toInfoString() const {
   std::stringstream sstr;
-  std::string       spaces(indent, ' ');
-  sstr << spaces << " - " << mType << " " << mName << " (Stages: " << toString(mActiveStages)
-       << ", Layout: " << getPackingStandard() << ")" << std::endl;
-  sstr << spaces << "   Size:     " << mSize << std::endl;
-  sstr << spaces << "   Binding:  " << mBinding << std::endl;
+  sstr << " - " << mType << " " << mName << " (Stages: " << toString(mActiveStages) << ")"
+       << std::endl;
+  sstr << "   Size:    " << mSize << std::endl;
+  sstr << "   Binding: " << mBinding << std::endl;
+  sstr << "   Set:     " << mSet << std::endl;
 
   for (auto const& range : mRanges) {
-    sstr << spaces << " - " << range.mType.getInfoType() << " " << range.mName
-         << range.mType.getArrayPostfix() << " (Stages: " << toString(range.mActiveStages) << ")"
-         << std::endl;
-    sstr << spaces << "     Size:         " << range.mSize << std::endl;
-    sstr << spaces << "     Offset:       " << range.mOffset << std::endl;
+    sstr << "   - " << range.getInfoType() << " " << range.mName << range.getArrayPostfix()
+         << " (Stages: " << toString(range.mActiveStages) << ")" << std::endl;
+    sstr << "     Size:         " << range.mSize << std::endl;
+    sstr << "     Offset:       " << range.mOffset << std::endl;
 
-    if (range.mType.mArrayStride > 0)
-      sstr << spaces << "     ArrayStride:  " << range.mType.mArrayStride << std::endl;
-    if (range.mType.mMatrixStride > 0)
-      sstr << spaces << "     MatrixStride: " << range.mType.mMatrixStride << std::endl;
+    if (range.mArrayStride > 0) sstr << "     ArrayStride:  " << range.mArrayStride << std::endl;
+    if (range.mMatrixStride > 0) sstr << "     MatrixStride: " << range.mMatrixStride << std::endl;
+
+    if (range.mBaseType == BufferRange::BaseType::eStruct) {
+      sstr << "     - Members: " << std::endl;
+      for (auto const& member : range.mMembers) {
+        sstr << "       - " << member.getInfoType() << " " << member.mName
+             << member.getArrayPostfix() << std::endl;
+        sstr << "         Size:         " << member.mSize << std::endl;
+        sstr << "         Offset:       " << member.mOffset << std::endl;
+
+        if (member.mArrayStride > 0)
+          sstr << "         ArrayStride:  " << member.mArrayStride << std::endl;
+        if (member.mMatrixStride > 0)
+          sstr << "         MatrixStride: " << member.mMatrixStride << std::endl;
+      }
+    }
   }
 
   return sstr.str();
@@ -588,94 +552,80 @@ std::string ShaderReflection::Buffer::toInfoString(uint32_t indent) const {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-std::string ShaderReflection::Buffer::toCppString(uint32_t indent) const {
+std::string ShaderReflection::Buffer::toCppString() const {
   std::stringstream sstr;
-  std::string       spaces(indent, ' ');
-  sstr << spaces << "struct " << mType << " {" << std::endl;
+  sstr << "struct " << mType << " {" << std::endl;
+  sstr << "  static uint32_t BINDING_POINT  = " << mBinding << ";" << std::endl;
+  sstr << "  static uint32_t DESCRIPTOR_SET = " << mSet << ";" << std::endl;
+
+  // collect all structs
+  std::map<std::string, BufferRange> structs;
+  for (auto const& range : mRanges) {
+    if (range.mBaseType == BufferRange::BaseType::eStruct) structs[range.mTypeName] = range;
+  }
+
+  // emit all structs
+  for (auto const& s : structs) {
+    sstr << std::endl;
+    sstr << "  struct " << s.first << " {" << std::endl;
+    uint32_t paddingCounter{0};
+
+    for (size_t i{0}; i < s.second.mMembers.size(); ++i) {
+      sstr << "    " << s.second.mMembers[i].getCppType() << " " << s.second.mMembers[i].mName
+           << s.second.mMembers[i].getArrayPostfix() << ";" << std::endl;
+
+      if (i < s.second.mMembers.size() - 1) {
+        uint32_t nextOffset{s.second.mMembers[i + 1].mOffset};
+        uint64_t requiredPadding{
+          (nextOffset - s.second.mMembers[i].mOffset - s.second.mMembers[i].mSize) / sizeof(float)};
+
+        while (requiredPadding > 0) {
+          sstr << "    float _padding" << ++paddingCounter << ";" << std::endl;
+          --requiredPadding;
+        }
+      }
+    }
+    sstr << "  };" << std::endl;
+  }
+
+  sstr << std::endl;
 
   uint32_t paddingCounter{0};
 
   for (size_t i{0}; i < mRanges.size(); ++i) {
-    sstr << spaces << "  " << mRanges[i].mType.getCppType() << " " << mRanges[i].mName
-         << mRanges[i].mType.getArrayPostfix() << ";" << std::endl;
+    sstr << "  " << mRanges[i].getCppType() << " " << mRanges[i].mName
+         << mRanges[i].getArrayPostfix() << ";" << std::endl;
 
-    uint32_t nextOffset{i < mRanges.size() - 1 ? mRanges[i + 1].mOffset : mSize};
-    uint64_t requiredPadding{(nextOffset - mRanges[i].mOffset - mRanges[i].mSize) / sizeof(float)};
+    if (i < mRanges.size() - 1) {
+      uint32_t nextOffset{mRanges[i + 1].mOffset};
+      uint64_t requiredPadding{(nextOffset - mRanges[i].mOffset - mRanges[i].mSize) /
+                               sizeof(float)};
 
-    while (requiredPadding > 0) {
-      sstr << spaces << "  float _padding" << ++paddingCounter << ";" << std::endl;
-      --requiredPadding;
+      while (requiredPadding > 0) {
+        sstr << "  float _padding" << ++paddingCounter << ";" << std::endl;
+        --requiredPadding;
+      }
     }
   }
 
-  sstr << spaces << "};" << std::endl;
+  sstr << "};" << std::endl;
   return sstr.str();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-std::string ShaderReflection::Sampler::toInfoString(uint32_t indent) const {
+std::string ShaderReflection::Sampler::toInfoString() const {
   std::stringstream sstr;
-  std::string       spaces(indent, ' ');
-  sstr << spaces << " - Name: " << mName << " (Stages: " << toString(mActiveStages) << ")"
-       << std::endl;
-  sstr << spaces << "   Binding: " << mBinding << std::endl;
+  sstr << " - Name: " << mName << " (Stages: " << toString(mActiveStages) << ")" << std::endl;
+  sstr << "   Binding: " << mBinding << std::endl;
   return sstr.str();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-std::string ShaderReflection::Sampler::toCppString(uint32_t indent) const {
+std::string ShaderReflection::Sampler::toCppString() const {
   std::stringstream sstr;
-  std::string       spaces(indent, ' ');
-  sstr << spaces << "const uint32_t binding_" << mName << " = " << mBinding << ";";
-  return sstr.str();
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-std::string ShaderReflection::Struct::toInfoString(uint32_t indent) const {
-  std::stringstream sstr;
-  std::string       spaces(indent, ' ');
-  sstr << spaces << " - struct " << mName << std::endl;
-  sstr << spaces << "   Size:     " << mSize << std::endl;
-
-  for (auto const& type : mMembers) {
-    sstr << spaces << " - " << type.second.getInfoType() << " " << type.first
-         << type.second.getArrayPostfix() << std::endl;
-
-    if (type.second.mArrayStride > 0)
-      sstr << spaces << "     ArrayStride:  " << type.second.mArrayStride << std::endl;
-    if (type.second.mMatrixStride > 0)
-      sstr << spaces << "     MatrixStride: " << type.second.mMatrixStride << std::endl;
-  }
-  return sstr.str();
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-std::string ShaderReflection::Struct::toCppString(uint32_t indent) const {
-  std::stringstream sstr;
-  std::string       spaces(indent, ' ');
-  sstr << spaces << "struct " << mName << " {" << std::endl;
-
-  // uint32_t paddingCounter{0};
-
-  for (size_t i{0}; i < mMembers.size(); ++i) {
-    sstr << spaces << " - " << mMembers[i].second.getInfoType() << " " << mMembers[i].first
-         << mMembers[i].second.getArrayPostfix() << std::endl;
-
-    // uint32_t nextOffset{i < mMembers.size() - 1 ? mMembers[i + 1].mOffset : mSize};
-    // uint64_t requiredPadding{(nextOffset - mMembers[i].mOffset - mMembers[i].mSize) /
-    //                          sizeof(float)};
-
-    // while (requiredPadding > 0) {
-    //   sstr << spaces << "  float _padding" << ++paddingCounter << ";" << std::endl;
-    //   --requiredPadding;
-    // }
-  }
-
-  sstr << spaces << "};" << std::endl;
+  sstr << "const uint32_t binding_" << mName << " = " << mBinding << ";";
   return sstr.str();
 }
 

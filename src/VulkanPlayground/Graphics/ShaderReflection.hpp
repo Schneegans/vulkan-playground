@@ -32,10 +32,20 @@ class ShaderReflection {
  public:
   // -------------------------------------------------------------------------------- public classes
 
-  struct Type {
+  struct BufferRange {
     enum class BaseType { eUnknown, eInt, eUInt, eFloat, eDouble, eStruct };
 
-    BaseType mBaseType{BaseType::eUnknown};
+    BaseType    mBaseType{BaseType::eUnknown};
+    std::string mName;
+
+    // size in bytes excluding padding but including stride
+    uint32_t mSize{0};
+
+    // offset from the beginning of the buffer in bytes
+    uint32_t mOffset{0};
+
+    // shader stages in which this range is potentially in use
+    vk::ShaderStageFlags mActiveStages;
 
     // size of one element, in bytes
     uint32_t mBaseSize{0};
@@ -53,9 +63,10 @@ class ShaderReflection {
     uint32_t              mArrayStride{0};
 
     // only set if mType is eStruct
-    std::string       mTypeName;
-    std::vector<Type> mMembers;
+    std::string              mTypeName;
+    std::vector<BufferRange> mMembers;
 
+    // size in bytes excluding padding and stride
     uint32_t    getBaseSize() const;
     std::string getTypePrefix() const;
     std::string getElementsPostfix() const;
@@ -64,40 +75,29 @@ class ShaderReflection {
     std::string getInfoType() const;
     std::string getCppType() const;
 
-    bool operator==(Type const& other) const {
-      return mBaseType == other.mBaseType && mBaseSize == other.mBaseSize &&
-             mElements == other.mElements && mColumns == other.mColumns && mRows == other.mRows &&
+    bool operator==(BufferRange const& other) const {
+      return mSize == other.mSize && mOffset == other.mOffset && mBaseType == other.mBaseType &&
+             mBaseSize == other.mBaseSize && mElements == other.mElements &&
+             mColumns == other.mColumns && mRows == other.mRows &&
              mMatrixStride == other.mMatrixStride && mArrayLengths == other.mArrayLengths &&
              mArrayStride == other.mArrayStride && mTypeName == other.mTypeName &&
              mMembers == other.mMembers;
     }
-    bool operator!=(Type const& other) const { return !(*this == other); }
-  };
-
-  struct BufferRange {
-    Type                 mType;
-    std::string          mName;
-    uint32_t             mSize{0};
-    uint32_t             mOffset{0};
-    vk::ShaderStageFlags mActiveStages;
+    bool operator!=(BufferRange const& other) const { return !(*this == other); }
   };
 
   struct Buffer {
-    enum class PackingStandard { eStd140, eStd430, eStd140EnhancedLayout, eStd430EnhancedLayout };
-
     std::string          mName;
     std::string          mType;
     uint32_t             mSize{0};
     uint32_t             mBinding{0};
+    uint32_t             mSet{0};
     vk::ShaderStageFlags mActiveStages;
-    PackingStandard      mPackingStandard{PackingStandard::eStd140};
 
     std::vector<BufferRange> mRanges;
 
-    std::string getPackingStandard() const;
-
-    std::string toInfoString(uint32_t indent = 0) const;
-    std::string toCppString(uint32_t indent = 0) const;
+    std::string toInfoString() const;
+    std::string toCppString() const;
   };
 
   struct Sampler {
@@ -105,18 +105,8 @@ class ShaderReflection {
     uint32_t             mBinding{0};
     vk::ShaderStageFlags mActiveStages;
 
-    std::string toInfoString(uint32_t indent = 0) const;
-    std::string toCppString(uint32_t indent = 0) const;
-  };
-
-  struct Struct {
-    std::string mName;
-    uint32_t    mSize{0};
-
-    std::vector<std::pair<std::string, Type>> mMembers;
-
-    std::string toInfoString(uint32_t indent = 0) const;
-    std::string toCppString(uint32_t indent = 0) const;
+    std::string toInfoString() const;
+    std::string toCppString() const;
   };
 
   enum class BufferType { ePushConstant, eUniform };
@@ -132,7 +122,6 @@ class ShaderReflection {
   vk::ShaderStageFlags       getStages() const { return mStages; }
   std::vector<Buffer> const& getBuffers(BufferType type) const;
   std::vector<Sampler> const& getSamplers() const { return mSamplers; }
-  std::vector<Struct> const&  getStructs() const { return mStructs; }
 
  private:
   // ------------------------------------------------------------------------------- private members
@@ -141,7 +130,6 @@ class ShaderReflection {
   std::vector<Buffer>  mPushConstantBuffers;
   std::vector<Buffer>  mUniformBuffers;
   std::vector<Sampler> mSamplers;
-  std::vector<Struct>  mStructs;
 };
 }
 }
