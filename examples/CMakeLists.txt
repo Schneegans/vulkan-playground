@@ -35,7 +35,7 @@ foreach(EXAMPLE ${ENABLED_EXAMPLES})
   add_executable(${EXAMPLE} ${EXAMPLE_SRC})
 
   target_include_directories(${EXAMPLE}
-    PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/${EXAMPLE}ProtoFiles"
+    PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/resources/shaders"
     PRIVATE "${CMAKE_SOURCE_DIR}/src"
     PUBLIC ${INCLUDE_DIRS}
   )

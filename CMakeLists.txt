@@ -29,7 +29,7 @@ else ()
   set(THIRD_PARTY_DIR_DEBUG "${CMAKE_SOURCE_DIR}/third-party/install/windows/Debug")
 endif ()
 
-include(cmake/precompile_glsl.cmake)
+include(cmake/CompileShaders.cmake)
 
 # find vulkan
 find_package(Vulkan REQUIRED)

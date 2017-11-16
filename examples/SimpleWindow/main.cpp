@@ -22,10 +22,7 @@
 #include <iostream>
 #include <thread>
 
-struct Uniforms {
-  glm::vec3 mColor;
-  float     mTime;
-};
+#include "texture.vert.hpp"
 
 int main(int argc, char* argv[]) {
   try {
@@ -88,8 +85,8 @@ int main(int argc, char* argv[]) {
     }
 
     Uniforms uniforms;
-    uniforms.mColor = glm::vec3(1, 0, 0);
-    uniforms.mTime  = 0.f;
+    uniforms.color = glm::vec3(1, 0, 0);
+    uniforms.time  = 0.f;
 
     while (!window->shouldClose()) {
       window->processInput();

@@ -17,13 +17,18 @@ vec2 positions[4] = vec2[](
     vec2(0.5, 0.5)
 );
 
+struct Bar {
+    float b;
+};
+
 struct Foo {
+    Bar bar;
     float b;
 };
 
 layout(push_constant, std430) uniform PushConstants {
-    Foo test[2];
     float important;
+    Foo test;
     Foo bar;
     dvec2 pos;
     // mat3 pos2[2];
@@ -32,8 +37,8 @@ layout(push_constant, std430) uniform PushConstants {
 } pushConstants;
 
 layout(binding = 0, std140) uniform Uniforms {
-    bool color;
-    vec3 time2[13];
+    vec3 color;
+    float time;
 } uniforms[2];
 
 layout(location = 0) out vec2 fragTexCoord;

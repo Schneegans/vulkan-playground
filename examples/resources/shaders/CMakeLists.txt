@@ -15,8 +15,8 @@ set(SHADERS
     "texture.vert"
 )
 
-precompile_glsl(CompileDemoShaders COMPILED_SHADERS "${SHADERS}")
+CompileShaders(CompileDemoShaders SPIRV_FILES HEADER_FILES "${SHADERS}")
 
-install(FILES ${COMPILED_SHADERS}
+install(FILES ${SPIRV_FILES}
     DESTINATION "bin/data/shaders"
 )

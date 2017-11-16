@@ -20,7 +20,7 @@ vec2 positions[4] = vec2[](
 layout(binding = 0) uniform Uniforms {
     vec3 color;
     float time;
-} uniforms;
+} uniforms; 
 
 layout(push_constant, std140) uniform PushConstants {
     vec2 pos;

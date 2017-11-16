@@ -182,8 +182,6 @@ ShaderReflection::ShaderReflection(std::vector<uint32_t> const& code) {
         buffer.mActiveStages = mStages;
       }
 
-      Illusion::ILLUSION_MESSAGE << buffer.mName << ": " << resource.type_id << std::endl;
-
       auto activeMembers{parser.get_active_buffer_ranges(resource.id)};
 
       buffer.mRanges = getBufferRanges(resource.type_id, activeMembers);
@@ -555,40 +553,64 @@ std::string ShaderReflection::Buffer::toInfoString() const {
 std::string ShaderReflection::Buffer::toCppString() const {
   std::stringstream sstr;
   sstr << "struct " << mType << " {" << std::endl;
-  sstr << "  static uint32_t BINDING_POINT  = " << mBinding << ";" << std::endl;
-  sstr << "  static uint32_t DESCRIPTOR_SET = " << mSet << ";" << std::endl;
+  sstr << std::endl;
+  sstr << "  // reflection information" << std::endl;
+  sstr << "  static const uint32_t BINDING_POINT  = " << mBinding << ";" << std::endl;
+  sstr << "  static const uint32_t DESCRIPTOR_SET = " << mSet << ";" << std::endl;
+  sstr << std::endl;
 
   // collect all structs
   std::map<std::string, BufferRange> structs;
-  for (auto const& range : mRanges) {
-    if (range.mBaseType == BufferRange::BaseType::eStruct) structs[range.mTypeName] = range;
-  }
-
-  // emit all structs
-  for (auto const& s : structs) {
-    sstr << std::endl;
-    sstr << "  struct " << s.first << " {" << std::endl;
-    uint32_t paddingCounter{0};
-
-    for (size_t i{0}; i < s.second.mMembers.size(); ++i) {
-      sstr << "    " << s.second.mMembers[i].getCppType() << " " << s.second.mMembers[i].mName
-           << s.second.mMembers[i].getArrayPostfix() << ";" << std::endl;
-
-      if (i < s.second.mMembers.size() - 1) {
-        uint32_t nextOffset{s.second.mMembers[i + 1].mOffset};
-        uint64_t requiredPadding{
-          (nextOffset - s.second.mMembers[i].mOffset - s.second.mMembers[i].mSize) / sizeof(float)};
-
-        while (requiredPadding > 0) {
-          sstr << "    float _padding" << ++paddingCounter << ";" << std::endl;
-          --requiredPadding;
+  std::function<void(std::vector<BufferRange> const&)> collectStructs =
+    [&structs, &collectStructs](std::vector<BufferRange> const& ranges) {
+      for (auto const& range : ranges) {
+        if (range.mBaseType == BufferRange::BaseType::eStruct) {
+          structs[range.mTypeName] = range;
+          collectStructs(range.mMembers);
         }
       }
+    };
+
+  collectStructs(mRanges);
+
+  if (structs.size() > 0) {
+
+    sstr << "  // structs used in this block" << std::endl;
+
+    // emit forward declaration for all structs
+    for (auto const& s : structs) {
+      sstr << "  struct " << s.first << ";" << std::endl;
     }
-    sstr << "  };" << std::endl;
+
+    sstr << std::endl;
+
+    // emit all structs
+    for (auto const& s : structs) {
+      sstr << "  struct " << s.first << " {" << std::endl;
+      uint32_t paddingCounter{0};
+
+      for (size_t i{0}; i < s.second.mMembers.size(); ++i) {
+        sstr << "    " << s.second.mMembers[i].getCppType() << " " << s.second.mMembers[i].mName
+             << s.second.mMembers[i].getArrayPostfix() << ";" << std::endl;
+
+        if (i < s.second.mMembers.size() - 1) {
+          uint32_t nextOffset{s.second.mMembers[i + 1].mOffset};
+          uint64_t requiredPadding{
+            (nextOffset - s.second.mMembers[i].mOffset - s.second.mMembers[i].mSize) /
+            sizeof(float)};
+
+          while (requiredPadding > 0) {
+            sstr << "    float _padding" << ++paddingCounter << ";" << std::endl;
+            --requiredPadding;
+          }
+        }
+      }
+      sstr << "  };" << std::endl;
+      sstr << std::endl;
+    }
   }
 
-  sstr << std::endl;
+  sstr << "  // struct members" << std::endl;
 
   uint32_t paddingCounter{0};
 
