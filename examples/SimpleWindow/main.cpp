@@ -22,7 +22,7 @@
 #include <iostream>
 #include <thread>
 
-#include "texture.vert.hpp"
+#include "shaders/SimpleTexture.hpp"
 
 int main(int argc, char* argv[]) {
   try {
@@ -42,10 +42,14 @@ int main(int argc, char* argv[]) {
 
     std::cout << pipeline->getReflection()->toInfoString() << std::endl;
 
+    std::cout << "sizeof(Uniforms) = " << sizeof(Reflection::SimpleTexture::Uniforms) << std::endl;
+    std::cout << "sizeof(PushConstants) = " << sizeof(Reflection::SimpleTexture::PushConstants)
+              << std::endl;
+
     auto texture = device->createTexture("data/textures/box.dds");
 
     auto uniformBuffer = device->createBuffer(
-      sizeof(Uniforms),
+      sizeof(Reflection::SimpleTexture::Uniforms),
       vk::BufferUsageFlagBits::eUniformBuffer | vk::BufferUsageFlagBits::eTransferDst,
       vk::MemoryPropertyFlagBits::eDeviceLocal);
 
@@ -55,11 +59,11 @@ int main(int argc, char* argv[]) {
       vk::DescriptorBufferInfo bufferInfo;
       bufferInfo.buffer = *uniformBuffer->mBuffer;
       bufferInfo.offset = 0;
-      bufferInfo.range  = sizeof(Uniforms);
+      bufferInfo.range  = sizeof(Reflection::SimpleTexture::Uniforms);
 
       vk::WriteDescriptorSet info;
       info.dstSet          = descriptorSet;
-      info.dstBinding      = 0;
+      info.dstBinding      = Reflection::SimpleTexture::Uniforms::BINDING_POINT;
       info.dstArrayElement = 0;
       info.descriptorType  = vk::DescriptorType::eUniformBuffer;
       info.descriptorCount = 1;
@@ -84,9 +88,12 @@ int main(int argc, char* argv[]) {
       device->getVkDevice()->updateDescriptorSets(info, nullptr);
     }
 
-    Uniforms uniforms;
+    Reflection::SimpleTexture::Uniforms uniforms;
     uniforms.color = glm::vec3(1, 0, 0);
     uniforms.time  = 0.f;
+
+    Reflection::SimpleTexture::PushConstants pushConstants;
+    pushConstants.pos = glm::vec2(0.2, 0.5);
 
     while (!window->shouldClose()) {
       window->processInput();
@@ -94,13 +101,16 @@ int main(int argc, char* argv[]) {
       auto frame = surface->beginFrame();
 
       frame.mPrimaryCommandBuffer.updateBuffer(
-        *uniformBuffer->mBuffer, 0, sizeof(Uniforms), (uint8_t*)&uniforms);
+        *uniformBuffer->mBuffer,
+        0,
+        sizeof(Reflection::SimpleTexture::Uniforms),
+        (uint8_t*)&uniforms);
 
       pipeline->use(frame, descriptorSet);
 
       surface->beginRenderPass(frame);
 
-      pipeline->setPushConstant(frame, vk::ShaderStageFlagBits::eVertex, 0, glm::vec2(0.2, 0.5));
+      pipeline->setPushConstant(frame, vk::ShaderStageFlagBits::eVertex, 0, pushConstants);
       frame.mPrimaryCommandBuffer.draw(4, 1, 0, 0);
 
       surface->endRenderPass(frame);

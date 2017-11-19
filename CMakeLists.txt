@@ -30,6 +30,7 @@ else ()
 endif ()
 
 include(cmake/CompileShaders.cmake)
+include(cmake/ExtractReflection.cmake)
 
 # find vulkan
 find_package(Vulkan REQUIRED)
@@ -81,4 +82,5 @@ elseif (WIN32)
 endif ()
 
 add_subdirectory(src/VulkanPlayground)
+add_subdirectory(src/ReflectionExtractor)
 add_subdirectory(examples)

@@ -8,12 +8,19 @@
 #                                                                                                  #
 #--------------------------------------------------------------------------------------------------#
 
-set(ENABLED_EXAMPLES
-  "SimpleWindow"
-  "HeaderGenerator"
+# -------------------------------------------------------------------------- install other resources
+install(DIRECTORY "resources/textures"
+    DESTINATION "bin/data"
 )
 
+# ------------------------------------------------------- generate spirv files and shader reflection
+add_subdirectory("resources/shaders")
+
 # -------------------------------------------------------------------------------- make each example
+set(ENABLED_EXAMPLES
+  "SimpleWindow"
+)
+
 foreach(EXAMPLE ${ENABLED_EXAMPLES})
   if (UNIX)
     # configure start script
@@ -33,9 +40,10 @@ foreach(EXAMPLE ${ENABLED_EXAMPLES})
 
   # compile and link
   add_executable(${EXAMPLE} ${EXAMPLE_SRC})
+  add_dependencies(${EXAMPLE} ExtractReflection)
 
   target_include_directories(${EXAMPLE}
-    PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/resources/shaders"
+    PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/resources"
     PRIVATE "${CMAKE_SOURCE_DIR}/src"
     PUBLIC ${INCLUDE_DIRS}
   )
@@ -46,6 +54,3 @@ foreach(EXAMPLE ${ENABLED_EXAMPLES})
     RUNTIME DESTINATION "bin"
   )
 endforeach()
-
-# -------------------------------------------------------------------------- install other resources
-add_subdirectory(resources)

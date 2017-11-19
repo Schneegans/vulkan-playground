@@ -8,37 +8,26 @@
 #                                                                                                  #
 #--------------------------------------------------------------------------------------------------#
 
-macro(CompileShaders _TARGET _SPIRV_FILES _HPP_FILES _GLSL_FILES)
+macro(CompileShaders _TARGET _SPIRV_FILES _GLSL_FILES)
 
   if(GLSLANGVALIDATOR)
-
     foreach(GLSL_FILE ${_GLSL_FILES})
-      set(SPIRV_FILE ${CMAKE_CURRENT_BINARY_DIR}/${GLSL_FILE}.spv)
+      get_filename_component(FILE_NAME ${GLSL_FILE} NAME)
+      set(SPIRV_FILE ${CMAKE_CURRENT_BINARY_DIR}/${FILE_NAME}.spv)
       add_custom_command(
         OUTPUT ${SPIRV_FILE}
         DEPENDS ${GLSL_FILE}
         COMMENT "Compiling ${GLSL_FILE} ..."
-        COMMAND ${GLSLANGVALIDATOR} -o ${CMAKE_CURRENT_BINARY_DIR}/${GLSL_FILE}.spv -V ${GLSL_FILE}
+        COMMAND ${GLSLANGVALIDATOR} -o ${SPIRV_FILE} -V ${GLSL_FILE}
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
       )
       list(APPEND ${_SPIRV_FILES} ${SPIRV_FILE})
 
-      set(HPP_FILE ${CMAKE_CURRENT_BINARY_DIR}/${GLSL_FILE}.hpp)
-      add_custom_command(
-        OUTPUT ${HPP_FILE}
-        DEPENDS ${SPIRV_FILE}
-        COMMENT "Extracting reflection information from ${SPIRV_FILE} ..."
-        COMMAND HeaderGenerator ${CMAKE_CURRENT_BINARY_DIR}/${GLSL_FILE}.spv ${HPP_FILE}
-        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-      )
-      list(APPEND ${_HPP_FILES} ${HPP_FILE})
     endforeach()
 
-    add_custom_target(${_TARGET} ALL DEPENDS ${${_SPIRV_FILES}} ${${_HPP_FILES}})
-
+    add_custom_target(${_TARGET} ALL DEPENDS ${${_SPIRV_FILES}})
   else(GLSLANGVALIDATOR)
     MESSAGE(WARNING "could not find GLSLANGVALIDATOR to compile shaders")
-
   endif(GLSLANGVALIDATOR)
 
 endmacro()

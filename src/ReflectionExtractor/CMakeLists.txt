@@ -8,30 +8,11 @@
 #                                                                                                  #
 #--------------------------------------------------------------------------------------------------#
 
-set(TARGET_NAME VulkanPlayground)
+add_executable(ReflectionExtractor "main.cpp")
 
-# ------------------------------------------------------------------------------------------ compile
-file(GLOB_RECURSE FILES_SRC RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
-  "*.cpp"
-  "${THIRD_PARTY_DIR_RELEASE}/src/*.cpp"
+target_include_directories(ReflectionExtractor
+  PRIVATE "${CMAKE_SOURCE_DIR}/src"
+  PUBLIC ${INCLUDE_DIRS}
 )
 
-include_directories(BEFORE SYSTEM
-  ${INCLUDE_DIRS}
-  ${CMAKE_CURRENT_BINARY_DIR}
-)
-
-add_library(${TARGET_NAME} STATIC ${FILES_SRC})
-
-target_link_libraries(${TARGET_NAME} ${LIBRARIES})
-
-# ------------------------------------------------------------------------------------------ install
-install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/ DESTINATION "include/VulkanPlayground"
-  FILES_MATCHING PATTERN "*.hpp"
-  PATTERN "internal" EXCLUDE)
-
-install(TARGETS ${TARGET_NAME}
-  RUNTIME DESTINATION "bin"
-  LIBRARY DESTINATION "lib"
-  ARCHIVE DESTINATION "lib"
-)
+target_link_libraries(ReflectionExtractor VulkanPlayground)

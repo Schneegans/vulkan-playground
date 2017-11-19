@@ -19,15 +19,6 @@ namespace Illusion {
 namespace Graphics {
 namespace {
 
-class MyCompiler : public spirv_cross::CompilerGLSL {
- public:
-  MyCompiler(std::vector<uint32_t> const& ir)
-    : spirv_cross::CompilerGLSL(ir) {}
-
-  std::vector<spirv_cross::Meta> const&    getMeta() const { return meta; }
-  std::vector<spirv_cross::Variant> const& getIDs() const { return ids; }
-};
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 std::string toString(vk::ShaderStageFlags stages) {
@@ -78,12 +69,9 @@ ShaderReflection::BufferRange::BaseType convert(spirv_cross::SPIRType type) {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 ShaderReflection::ShaderReflection(std::vector<uint32_t> const& code) {
-  MyCompiler                   parser{code};
+  spirv_cross::CompilerGLSL    parser{code};
   spirv_cross::ShaderResources resources       = parser.get_shader_resources();
   auto                         activeVariables = parser.get_active_interface_variables();
-
-  // spirv_cross::CompilerCPP compiler{code};
-  // Illusion::ILLUSION_MESSAGE << compiler.compile() << std::endl;
 
   // collect basic information ---------------------------------------------------------------------
   auto stage = parser.get_execution_model();
@@ -99,20 +87,6 @@ ShaderReflection::ShaderReflection(std::vector<uint32_t> const& code) {
     throw std::runtime_error{"Shader stage is not supported!"};
     break;
   }
-
-  // for (auto& id : parser.getIDs()) {
-  //   if (id.get_type() == spirv_cross::TypeType) {
-  //     auto& type = id.get<spirv_cross::SPIRType>();
-  //     auto& meta = parser.getMeta()[type.self];
-  //     if (
-  //       type.basetype == spirv_cross::SPIRType::Struct && type.array.empty() && !type.pointer &&
-  //       (meta.decoration.decoration_flags &
-  //        ((1ull << spv::DecorationBlock) | (1ull << spv::DecorationBufferBlock))) == 0) {
-
-  //       Illusion::ILLUSION_MESSAGE << "-------- " << meta.decoration.alias << std::endl;
-  //     }
-  //   }
-  // }
 
   // collect buffers -------------------------------------------------------------------------------
   std::function<std::vector<BufferRange>(uint32_t, std::vector<spirv_cross::BufferRange> const&)>
@@ -234,88 +208,102 @@ ShaderReflection::ShaderReflection(std::vector<uint32_t> const& code) {
 
 ShaderReflection::ShaderReflection(std::vector<ShaderReflectionPtr> const& stages) {
   for (auto const& stage : stages) {
+    merge(*stage);
+  }
+}
 
-    // check that we do not have such a stage already
-    if ((VkShaderStageFlags)(mStages & stage->mStages) > 0) {
-      throw std::runtime_error{toString(stage->mStages) + " shader stage is already present!"};
-    }
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    // concatenate stages
-    mStages |= stage->mStages;
+ShaderReflection::ShaderReflection(std::vector<ShaderReflection> const& stages) {
+  for (auto const& stage : stages) {
+    merge(stage);
+  }
+}
 
-    // combine buffers
-    auto mergeBuffers =
-      [this](std::vector<Buffer> const& srcBuffers, std::vector<Buffer>& dstBuffers) {
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
-        for (auto const& srcBuffer : srcBuffers) {
-          bool merged = false;
+void ShaderReflection::merge(ShaderReflection const& stage) {
 
-          for (auto& dstBuffer : dstBuffers) {
+  // check that we do not have such a stage already
+  if ((VkShaderStageFlags)(mStages & stage.mStages) > 0) {
+    throw std::runtime_error{toString(stage.mStages) + " shader stage is already present!"};
+  }
 
-            // there is already a buffer at this binding point
-            if (srcBuffer.mBinding == dstBuffer.mBinding && srcBuffer.mSet == dstBuffer.mSet) {
+  // concatenate stages
+  mStages |= stage.mStages;
 
-              // check if they have the same type
-              if (srcBuffer.mType != dstBuffer.mType) {
-                throw std::runtime_error{"Types of Buffers at binding point " +
-                                         std::to_string(dstBuffer.mBinding) + " do not match!"};
-              }
+  // combine buffers
+  auto mergeBuffers =
+    [this](std::vector<Buffer> const& srcBuffers, std::vector<Buffer>& dstBuffers) {
 
-              // check if they have the same size
-              if (srcBuffer.mSize != dstBuffer.mSize) {
-                throw std::runtime_error{"Sizes of Buffers at binding point " +
-                                         std::to_string(dstBuffer.mBinding) + " do not match!"};
-              }
+      for (auto const& srcBuffer : srcBuffers) {
+        bool merged = false;
 
-              // check if they have the same ranges
-              if (srcBuffer.mRanges.size() != dstBuffer.mRanges.size()) {
+        for (auto& dstBuffer : dstBuffers) {
+
+          // there is already a buffer at this binding point
+          if (srcBuffer.mBinding == dstBuffer.mBinding && srcBuffer.mSet == dstBuffer.mSet) {
+
+            // check if they have the same type
+            if (srcBuffer.mType != dstBuffer.mType) {
+              throw std::runtime_error{"Types of Buffers at binding point " +
+                                       std::to_string(dstBuffer.mBinding) + " do not match!"};
+            }
+
+            // check if they have the same size
+            if (srcBuffer.mSize != dstBuffer.mSize) {
+              throw std::runtime_error{"Sizes of Buffers at binding point " +
+                                       std::to_string(dstBuffer.mBinding) + " do not match!"};
+            }
+
+            // check if they have the same ranges
+            if (srcBuffer.mRanges.size() != dstBuffer.mRanges.size()) {
+              throw std::runtime_error{"Ranges of Buffers at binding point " +
+                                       std::to_string(dstBuffer.mBinding) + " do not match!"};
+            }
+
+            // check if they have the same ranges
+            for (size_t i{0}; i < srcBuffer.mRanges.size(); ++i) {
+              if (srcBuffer.mRanges[i] != dstBuffer.mRanges[i]) {
                 throw std::runtime_error{"Ranges of Buffers at binding point " +
                                          std::to_string(dstBuffer.mBinding) + " do not match!"};
               }
 
-              // check if they have the same ranges
-              for (size_t i{0}; i < srcBuffer.mRanges.size(); ++i) {
-                if (srcBuffer.mRanges[i] != dstBuffer.mRanges[i]) {
-                  throw std::runtime_error{"Ranges of Buffers at binding point " +
-                                           std::to_string(dstBuffer.mBinding) + " do not match!"};
-                }
-
-                dstBuffer.mRanges[i].mActiveStages |= srcBuffer.mRanges[i].mActiveStages;
-              }
-
-              dstBuffer.mActiveStages |= srcBuffer.mActiveStages;
-
-              merged = true;
-              break;
+              dstBuffer.mRanges[i].mActiveStages |= srcBuffer.mRanges[i].mActiveStages;
             }
-          }
 
-          // this buffer is not part of the combined module yet
-          if (!merged) dstBuffers.push_back(srcBuffer);
-        }
-      };
+            dstBuffer.mActiveStages |= srcBuffer.mActiveStages;
 
-    // combine samplers
-    auto mergeSamplers = [](std::vector<Sampler> const& src, std::vector<Sampler>& dst) {
-      for (auto const& srcSampler : src) {
-        bool merged = false;
-        for (auto& dstSampler : dst) {
-          if (srcSampler.mBinding == dstSampler.mBinding) {
-            dstSampler.mActiveStages |= srcSampler.mActiveStages;
             merged = true;
             break;
           }
         }
 
         // this buffer is not part of the combined module yet
-        if (!merged) { dst.push_back(srcSampler); }
+        if (!merged) dstBuffers.push_back(srcBuffer);
       }
     };
 
-    mergeBuffers(stage->mPushConstantBuffers, mPushConstantBuffers);
-    mergeBuffers(stage->mUniformBuffers, mUniformBuffers);
-    mergeSamplers(stage->mSamplers, mSamplers);
-  }
+  // combine samplers
+  auto mergeSamplers = [](std::vector<Sampler> const& src, std::vector<Sampler>& dst) {
+    for (auto const& srcSampler : src) {
+      bool merged = false;
+      for (auto& dstSampler : dst) {
+        if (srcSampler.mBinding == dstSampler.mBinding) {
+          dstSampler.mActiveStages |= srcSampler.mActiveStages;
+          merged = true;
+          break;
+        }
+      }
+
+      // this buffer is not part of the combined module yet
+      if (!merged) { dst.push_back(srcSampler); }
+    }
+  };
+
+  mergeBuffers(stage.mPushConstantBuffers, mPushConstantBuffers);
+  mergeBuffers(stage.mUniformBuffers, mUniformBuffers);
+  mergeSamplers(stage.mSamplers, mSamplers);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

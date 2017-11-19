@@ -113,6 +113,7 @@ class ShaderReflection {
 
   // -------------------------------------------------------------------------------- public methods
   ShaderReflection(std::vector<uint32_t> const& code);
+  ShaderReflection(std::vector<ShaderReflection> const& stages);
   ShaderReflection(std::vector<ShaderReflectionPtr> const& stages);
 
   std::string toInfoString() const;
@@ -124,6 +125,9 @@ class ShaderReflection {
   std::vector<Sampler> const& getSamplers() const { return mSamplers; }
 
  private:
+  // ------------------------------------------------------------------------------- private methods
+  void merge(ShaderReflection const& stage);
+
   // ------------------------------------------------------------------------------- private members
   vk::ShaderStageFlags mStages;
 

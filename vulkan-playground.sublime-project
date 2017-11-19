@@ -41,10 +41,8 @@
         "cc_include_options":
         [
             "-I${project_path}/../../vulkan/x86_64/include",
-            "-I${project_path}/../cef",
             "-I${project_path}/third-party/install/linux/Release/include",
-            "-I${project_path}/build/linux/release/examples/ChatProtoFiles",
-            "-I${project_path}/build/linux/release/examples/MultiplayerPongProtoFiles",
+            "-I${project_path}/build/linux/Release/examples/resources",
             "-I${project_path}/src",
             "-std=c++11"
         ]

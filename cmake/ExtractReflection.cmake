@@ -8,8 +8,23 @@
 #                                                                                                  #
 #--------------------------------------------------------------------------------------------------#
 
-install(DIRECTORY "textures"
-    DESTINATION "bin/data"
-)
+macro(ExtractReflection _NAME _HPP_FILES)
 
-add_subdirectory(shaders)
+  set(_SPIRV_FILES)
+
+  foreach(SPIRV_FILE ${ARGN})
+    set(_SPIRV_FILES ${_SPIRV_FILES} ${CMAKE_CURRENT_BINARY_DIR}/${SPIRV_FILE})
+  endforeach()
+
+  set(HPP_FILE ${CMAKE_CURRENT_BINARY_DIR}/${_NAME}.hpp)
+
+  add_custom_command(
+    OUTPUT ${HPP_FILE}
+    DEPENDS ${ARGN}
+    COMMENT "Extracting reflection information from ${ARGN} ..."
+    COMMAND ReflectionExtractor ${_SPIRV_FILES} ${_NAME} ${HPP_FILE}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  )
+  list(APPEND ${_HPP_FILES} ${HPP_FILE})
+
+endmacro()

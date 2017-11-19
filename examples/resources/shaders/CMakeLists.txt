@@ -8,6 +8,7 @@
 #                                                                                                  #
 #--------------------------------------------------------------------------------------------------#
 
+# ----------------------------------------------------------------------------- generate spirv files
 set(SHADERS
     "color.frag"
     "color.vert"
@@ -15,7 +16,13 @@ set(SHADERS
     "texture.vert"
 )
 
-CompileShaders(CompileDemoShaders SPIRV_FILES HEADER_FILES "${SHADERS}")
+CompileShaders(CompileShaders SPIRV_FILES "${SHADERS}")
+
+# -------------------------------------------------------------------------------- shader reflection
+ExtractReflection(SimpleTexture REFLECTION_HEADERS "texture.vert.spv" "texture.frag.spv")
+ExtractReflection(SimpleColor REFLECTION_HEADERS "color.vert.spv" "color.frag.spv")
+
+add_custom_target(ExtractReflection ALL DEPENDS ${REFLECTION_HEADERS})
 
 install(FILES ${SPIRV_FILES}
     DESTINATION "bin/data/shaders"

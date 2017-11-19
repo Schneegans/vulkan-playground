@@ -26,14 +26,11 @@ struct Foo {
     float b;
 };
 
-layout(push_constant, std430) uniform PushConstants {
-    float important;
+layout(push_constant, std140) uniform PushConstants {
+    vec2 pos;
+    float important[3];
     Foo test;
-    Foo bar;
-    dvec2 pos;
-    // mat3 pos2[2];
-    // float color2[3];
-    // vec2 pos3;
+    Foo bar1;
 } pushConstants;
 
 layout(binding = 0, std140) uniform Uniforms {
