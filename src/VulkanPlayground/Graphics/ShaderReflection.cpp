@@ -646,9 +646,12 @@ std::string ShaderReflection::Buffer::toCppString() const {
         uint32_t selfOffset{structMembers[i].mOffset};
         uint32_t selfSize{structMembers[i].mSize};
 
-        if (structMembers[i].mBaseType == BufferRange::BaseType::eStruct) {
-          // structs have padding to their base alignment "built in" - so we need
-          // to add this to the size of the struct member
+        if (
+          structMembers[i].mBaseType == BufferRange::BaseType::eStruct &&
+          structMembers[i].mArrayStride == 0) {
+          // structs have padding to their base alignment "built in" - herefore we need to add this
+          // to the size of the range (only if it's not an array of structs, in this case the
+          // padding is already included in the mSize member)
           selfSize += structMembers[i].getInternalPadding();
         }
 
@@ -687,9 +690,10 @@ std::string ShaderReflection::Buffer::toCppString() const {
       uint32_t selfOffset{mRanges[i].mOffset};
       uint32_t selfSize{mRanges[i].mSize};
 
-      if (mRanges[i].mBaseType == BufferRange::BaseType::eStruct) {
-        // structs have padding to their base alignment "built in"
-        // therefore we need to add this to the size of the range
+      if (mRanges[i].mBaseType == BufferRange::BaseType::eStruct && mRanges[i].mArrayStride == 0) {
+        // structs have padding to their base alignment "built in", therefore we need to add this
+        // to the size of the range (only if it's not an array of structs, in this case the padding
+        // is already included in the mSize member)
         selfSize += mRanges[i].getInternalPadding();
       }
 

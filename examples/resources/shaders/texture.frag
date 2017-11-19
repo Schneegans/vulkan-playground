@@ -13,10 +13,6 @@
 layout(location = 0) in vec2 fragTexCoord;
 
 layout(binding = 1) uniform sampler2D texSampler;
-layout(binding = 0) uniform Uniforms {
-    vec3 color;
-    float time;
-} uniforms;
 
 layout(location = 0) out vec4 outColor;
 

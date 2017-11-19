@@ -15,6 +15,7 @@
 #include <VulkanPlayground/Graphics/Pipeline.hpp>
 #include <VulkanPlayground/Graphics/ShaderReflection.hpp>
 #include <VulkanPlayground/Graphics/Surface.hpp>
+#include <VulkanPlayground/Graphics/UniformBuffer.hpp>
 #include <VulkanPlayground/Graphics/Window.hpp>
 
 #include <glm/glm.hpp>
@@ -48,29 +49,14 @@ int main(int argc, char* argv[]) {
 
     auto texture = device->createTexture("data/textures/box.dds");
 
-    auto uniformBuffer = device->createBuffer(
-      sizeof(Reflection::SimpleTexture::Uniforms),
-      vk::BufferUsageFlagBits::eUniformBuffer | vk::BufferUsageFlagBits::eTransferDst,
-      vk::MemoryPropertyFlagBits::eDeviceLocal);
-
     auto descriptorSet{pipeline->allocateDescriptorSet()};
 
-    {
-      vk::DescriptorBufferInfo bufferInfo;
-      bufferInfo.buffer = *uniformBuffer->mBuffer;
-      bufferInfo.offset = 0;
-      bufferInfo.range  = sizeof(Reflection::SimpleTexture::Uniforms);
+    Illusion::Graphics::UniformBuffer<Reflection::SimpleTexture::Uniforms> uniformBuffer(device);
 
-      vk::WriteDescriptorSet info;
-      info.dstSet          = descriptorSet;
-      info.dstBinding      = Reflection::SimpleTexture::Uniforms::BINDING_POINT;
-      info.dstArrayElement = 0;
-      info.descriptorType  = vk::DescriptorType::eUniformBuffer;
-      info.descriptorCount = 1;
-      info.pBufferInfo     = &bufferInfo;
+    uniformBuffer.value.time = 0.f;
 
-      device->getVkDevice()->updateDescriptorSets(info, nullptr);
-    }
+    uniformBuffer.bind(descriptorSet);
+
     {
       vk::DescriptorImageInfo imageInfo;
       imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
@@ -88,10 +74,6 @@ int main(int argc, char* argv[]) {
       device->getVkDevice()->updateDescriptorSets(info, nullptr);
     }
 
-    Reflection::SimpleTexture::Uniforms uniforms;
-    uniforms.color = glm::vec3(1, 0, 0);
-    uniforms.time  = 0.f;
-
     Reflection::SimpleTexture::PushConstants pushConstants;
     pushConstants.pos = glm::vec2(0.2, 0.5);
 
@@ -100,11 +82,8 @@ int main(int argc, char* argv[]) {
 
       auto frame = surface->beginFrame();
 
-      frame.mPrimaryCommandBuffer.updateBuffer(
-        *uniformBuffer->mBuffer,
-        0,
-        sizeof(Reflection::SimpleTexture::Uniforms),
-        (uint8_t*)&uniforms);
+      uniformBuffer.value.time += 0.01;
+      uniformBuffer.update(frame);
 
       pipeline->use(frame, descriptorSet);
 

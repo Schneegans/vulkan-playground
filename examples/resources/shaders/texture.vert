@@ -18,13 +18,13 @@ vec2 positions[4] = vec2[](
 );
 
 struct A {
-    float a[5];
-    uvec2 b;
+    mat2 b;
 }; 
 
 struct B {
-    A a;
-    float b;
+    A a[2];
+    // float b[5];
+    float c;
 };
 
 layout(push_constant, std430) uniform PushConstants {
@@ -33,13 +33,20 @@ layout(push_constant, std430) uniform PushConstants {
 } pushConstants;
 
 layout(binding = 0, std140) uniform Uniforms {
-    vec3 color;
+    mat4 fuu[123];
+    mat2 bar;
+    B b[3];
+    A a[17];
+    vec2 c;
+    vec3 d;
+    vec4 f;
+    float g;
     float time;
-} uniforms[2];
+} uniforms;
 
 layout(location = 0) out vec2 fragTexCoord;
 
 void main() {
     fragTexCoord = positions[gl_VertexIndex] + 0.5;
-    gl_Position = vec4(positions[gl_VertexIndex] + pushConstants.pos, 0.0, 1.0);
+    gl_Position = vec4(positions[gl_VertexIndex] + pushConstants.pos + vec2(0, sin(uniforms.time)), 0.0, 1.0);
 }
