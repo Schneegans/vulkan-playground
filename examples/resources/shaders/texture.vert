@@ -17,20 +17,19 @@ vec2 positions[4] = vec2[](
     vec2(0.5, 0.5)
 );
 
-struct Bar {
+struct A {
+    float a[5];
+    uvec2 b;
+}; 
+
+struct B {
+    A a;
     float b;
 };
 
-struct Foo {
-    Bar bar;
-    float b;
-};
-
-layout(push_constant, std140) uniform PushConstants {
-    vec2 pos;
-    float important[3];
-    Foo test;
-    Foo bar1;
+layout(push_constant, std430) uniform PushConstants {
+    B test1;
+    vec2 pos; 
 } pushConstants;
 
 layout(binding = 0, std140) uniform Uniforms {

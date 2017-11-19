@@ -41,6 +41,9 @@ class ShaderReflection {
     // size in bytes excluding padding but including stride
     uint32_t mSize{0};
 
+    // in bytes
+    uint32_t mAlignment{0};
+
     // offset from the beginning of the buffer in bytes
     uint32_t mOffset{0};
 
@@ -66,6 +69,10 @@ class ShaderReflection {
     std::string              mTypeName;
     std::vector<BufferRange> mMembers;
 
+    // for structs, this returns the amount of padding which is required after the last member
+    // until the alignment boundary of the struct is hit
+    uint32_t getInternalPadding() const;
+
     // size in bytes excluding padding and stride
     uint32_t    getBaseSize() const;
     std::string getTypePrefix() const;
@@ -87,12 +94,15 @@ class ShaderReflection {
   };
 
   struct Buffer {
+    enum class PackingStandard { eStd140, eStd430 };
+
     std::string          mName;
     std::string          mType;
     uint32_t             mSize{0};
     uint32_t             mBinding{0};
     uint32_t             mSet{0};
     vk::ShaderStageFlags mActiveStages;
+    PackingStandard      mPackingStandard{PackingStandard::eStd140};
 
     std::vector<BufferRange> mRanges;
 
