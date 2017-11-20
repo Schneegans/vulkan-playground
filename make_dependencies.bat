@@ -46,6 +46,16 @@ call third-party\make_spirv_cross.bat Release
 call third-party\make_spirv_cross.bat Debug
 @echo off
 
+echo ""
+echo "-------------------------------------------------------------------------"
+echo "------------------------ Copying tinygltf -------------------------------"
+echo "-------------------------------------------------------------------------"
+echo ""
+call third-party\make_tinygltf.bat Release
+@echo off
+call third-party\make_tinygltf.bat Debug
+@echo off
+
 cd "%CURRENT_DIR%"
 
 @echo on

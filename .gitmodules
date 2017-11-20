@@ -10,3 +10,6 @@
 [submodule "third-party/gli"]
 	path = third-party/gli
 	url = https://github.com/g-truc/gli.git
+[submodule "third-party/tinygltf"]
+	path = third-party/tinygltf
+	url = https://github.com/syoyo/tinygltf.git

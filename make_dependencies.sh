@@ -43,3 +43,11 @@ echo "-------------------------------------------------------------------------"
 echo ""
 $SCRIPT_DIR/third-party/make_spirv_cross.sh Release
 $SCRIPT_DIR/third-party/make_spirv_cross.sh Debug
+
+echo ""
+echo "-------------------------------------------------------------------------"
+echo "------------------------- Copying tinygltf ------------------------------"
+echo "-------------------------------------------------------------------------"
+echo ""
+$SCRIPT_DIR/third-party/make_tinygltf.sh Release
+$SCRIPT_DIR/third-party/make_tinygltf.sh Debug
