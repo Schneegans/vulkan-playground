@@ -19,6 +19,7 @@ add_subdirectory("resources/shaders")
 # -------------------------------------------------------------------------------- make each example
 set(ENABLED_EXAMPLES
   "SimpleWindow"
+  "ModelViewer"
 )
 
 foreach(EXAMPLE ${ENABLED_EXAMPLES})
