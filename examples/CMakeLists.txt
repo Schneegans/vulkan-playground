@@ -18,7 +18,7 @@ add_subdirectory("resources/shaders")
 
 # -------------------------------------------------------------------------------- make each example
 set(ENABLED_EXAMPLES
-  "SimpleWindow"
+  "TexturedQuad"
   "ModelViewer"
 )
 

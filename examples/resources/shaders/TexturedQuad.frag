@@ -10,43 +10,16 @@
 
 #version 450
 
-vec2 positions[4] = vec2[](
-    vec2(-0.5, -0.5),
-    vec2(0.5, -0.5),
-    vec2(-0.5, 0.5),
-    vec2(0.5, 0.5)
-);
+// inputs ------------------------------------------------------------------------------------------
+layout(location = 0) in vec2 texcoords;
 
-struct A {
-    mat2 b;
-}; 
+// uniforms ----------------------------------------------------------------------------------------
+layout(binding = 1) uniform sampler2D texSampler;
 
-struct B {
-    A a[2];
-    // float b[5];
-    float c;
-};
+// outputs -----------------------------------------------------------------------------------------
+layout(location = 0) out vec4 outColor;
 
-layout(push_constant, std430) uniform PushConstants {
-    B test1;
-    vec2 pos; 
-} pushConstants;
-
-layout(binding = 0, std140) uniform Uniforms {
-    mat4 fuu[123];
-    mat2 bar;
-    B b[3];
-    A a[17];
-    vec2 c;
-    vec3 d;
-    vec4 f;
-    float g;
-    float time;
-} uniforms;
-
-layout(location = 0) out vec2 fragTexCoord;
-
+// methods -----------------------------------------------------------------------------------------
 void main() {
-    fragTexCoord = positions[gl_VertexIndex] + 0.5;
-    gl_Position = vec4(positions[gl_VertexIndex] + pushConstants.pos + vec2(0, sin(uniforms.time)), 0.0, 1.0);
+    outColor = texture(texSampler, texcoords);
 }

@@ -78,8 +78,6 @@ void Device::endSingleTimeCommands(vk::CommandBuffer commandBuffer) const {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
 ImagePtr Device::createImage(
   uint32_t                width,
   uint32_t                height,
@@ -128,7 +126,6 @@ VkBufferPtr Device::createVkBuffer(vk::BufferCreateInfo const& info) const {
   auto device{mVkDevice};
   return makeVulkanPtr(device->createBuffer(info), [device](vk::Buffer* obj) {
     ILLUSION_DEBUG << "Deleting buffer." << std::endl;
-    device->waitIdle(); // is that really necessary?
     device->destroyBuffer(*obj);
   });
 }

@@ -10,17 +10,17 @@
 
 # ----------------------------------------------------------------------------- generate spirv files
 set(SHADERS
-    "color.frag"
-    "color.vert"
-    "texture.frag"
-    "texture.vert"
+    "PBR.frag"
+    "PBR.vert"
+    "TexturedQuad.frag"
+    "TexturedQuad.vert"
 )
 
 CompileShaders(CompileShaders SPIRV_FILES "${SHADERS}")
 
 # -------------------------------------------------------------------------------- shader reflection
-ExtractReflection(SimpleTexture REFLECTION_HEADERS "texture.vert.spv" "texture.frag.spv")
-ExtractReflection(SimpleColor REFLECTION_HEADERS "color.vert.spv" "color.frag.spv")
+ExtractReflection(TexturedQuad REFLECTION_HEADERS "TexturedQuad.vert.spv" "TexturedQuad.frag.spv")
+ExtractReflection(PBR REFLECTION_HEADERS "PBR.vert.spv" "PBR.frag.spv")
 
 add_custom_target(ExtractReflection ALL DEPENDS ${REFLECTION_HEADERS})
 

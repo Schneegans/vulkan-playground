@@ -21,7 +21,8 @@ namespace Graphics {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-Texture::Texture(DevicePtr const& device, std::string const& fileName) {
+Texture::Texture(
+  DevicePtr const& device, std::string const& fileName, vk::SamplerCreateInfo const& sampler) {
 
   // first try loading with gli
   gli::texture texture = gli::load(fileName);
@@ -31,15 +32,7 @@ Texture::Texture(DevicePtr const& device, std::string const& fileName) {
       levels.push_back({texture.extent(i).x, texture.extent(i).y, texture.size(i)});
     }
 
-    InitData(
-      device,
-      levels,
-      (vk::Format)texture.format(),
-      vk::ImageTiling::eOptimal,
-      vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst,
-      vk::MemoryPropertyFlagBits::eDeviceLocal,
-      texture.size(),
-      texture.data());
+    InitData(device, levels, (vk::Format)texture.format(), sampler, texture.size(), texture.data());
 
     return;
   }
@@ -84,15 +77,7 @@ Texture::Texture(DevicePtr const& device, std::string const& fileName) {
         format = vk::Format::eR32G32B32A32Sfloat;
     }
 
-    InitData(
-      device,
-      levels,
-      format,
-      vk::ImageTiling::eOptimal,
-      vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst,
-      vk::MemoryPropertyFlagBits::eDeviceLocal,
-      size,
-      data);
+    InitData(device, levels, format, sampler, size, data);
 
     stbi_image_free(data);
 
@@ -104,30 +89,47 @@ Texture::Texture(DevicePtr const& device, std::string const& fileName) {
   throw std::runtime_error{"Failed to load texture " + fileName + ": " + error};
 }
 
-Texture::Texture(
-  DevicePtr const&          device,
-  std::vector<TextureLevel> levels,
-  vk::Format                format,
-  vk::ImageTiling           tiling,
-  vk::ImageUsageFlags       usage,
-  vk::MemoryPropertyFlags   properties,
-  size_t                    size,
-  void*                     data) {
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
-  InitData(device, levels, format, tiling, usage, properties, size, data);
+Texture::Texture(
+  DevicePtr const&             device,
+  int32_t                      width,
+  int32_t                      height,
+  vk::Format                   format,
+  vk::SamplerCreateInfo const& sampler,
+  size_t                       size,
+  void*                        data) {
+
+  TextureLevel level;
+  level.mWidth  = width;
+  level.mHeight = height;
+  level.mSize   = size;
+
+  InitData(device, {level}, format, sampler, size, data);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+Texture::Texture(
+  DevicePtr const&             device,
+  std::vector<TextureLevel>    levels,
+  vk::Format                   format,
+  vk::SamplerCreateInfo const& sampler,
+  size_t                       size,
+  void*                        data) {
+
+  InitData(device, levels, format, sampler, size, data);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void Texture::InitData(
-  DevicePtr const&          device,
-  std::vector<TextureLevel> levels,
-  vk::Format                format,
-  vk::ImageTiling           tiling,
-  vk::ImageUsageFlags       usage,
-  vk::MemoryPropertyFlags   properties,
-  size_t                    size,
-  void*                     data) {
+  DevicePtr const&             device,
+  std::vector<TextureLevel>    levels,
+  vk::Format                   format,
+  vk::SamplerCreateInfo const& sampler,
+  size_t                       size,
+  void*                        data) {
 
   auto stagingBuffer = device->createBuffer(
     size,
@@ -136,7 +138,13 @@ void Texture::InitData(
     data);
 
   auto image = device->createImage(
-    levels[0].mWidth, levels[0].mHeight, levels.size(), format, tiling, usage, properties);
+    levels[0].mWidth,
+    levels[0].mHeight,
+    levels.size(),
+    format,
+    vk::ImageTiling::eOptimal,
+    vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst,
+    vk::MemoryPropertyFlagBits::eDeviceLocal);
 
   mImage  = image->mImage;
   mMemory = image->mMemory;
@@ -156,22 +164,8 @@ void Texture::InitData(
   }
 
   {
-    vk::SamplerCreateInfo info;
-    info.magFilter               = vk::Filter::eLinear;
-    info.minFilter               = vk::Filter::eLinear;
-    info.addressModeU            = vk::SamplerAddressMode::eRepeat;
-    info.addressModeV            = vk::SamplerAddressMode::eRepeat;
-    info.addressModeW            = vk::SamplerAddressMode::eRepeat;
-    info.anisotropyEnable        = true;
-    info.maxAnisotropy           = 16;
-    info.borderColor             = vk::BorderColor::eIntOpaqueBlack;
-    info.unnormalizedCoordinates = false;
-    info.compareEnable           = false;
-    info.compareOp               = vk::CompareOp::eAlways;
-    info.mipmapMode              = vk::SamplerMipmapMode::eLinear;
-    info.mipLodBias              = 0.0f;
-    info.minLod                  = 0.0f;
-    info.maxLod                  = levels.size();
+    vk::SamplerCreateInfo info(sampler);
+    info.maxLod = levels.size();
 
     mSampler = device->createVkSampler(info);
   }

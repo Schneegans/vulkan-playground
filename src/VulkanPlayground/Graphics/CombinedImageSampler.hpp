@@ -8,11 +8,12 @@
 //                                                                                                //
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#ifndef ILLUSION_GRAPHICS_UNIFORM_BUFFER_HPP
-#define ILLUSION_GRAPHICS_UNIFORM_BUFFER_HPP
+#ifndef ILLUSION_GRAPHICS_COMBINED_IMAGE_SAMPLER_HPP
+#define ILLUSION_GRAPHICS_COMBINED_IMAGE_SAMPLER_HPP
 
 // ---------------------------------------------------------------------------------------- includes
-#include "Surface.hpp"
+#include "Device.hpp"
+#include "Texture.hpp"
 
 namespace Illusion {
 namespace Graphics {
@@ -22,36 +23,29 @@ namespace Graphics {
 
 // -------------------------------------------------------------------------------------------------
 template <typename T>
-class UniformBuffer : public T {
+class CombinedImageSampler : public T {
 
  public:
+  // -------------------------------------------------------------------------------- public members
+  TexturePtr mTexture;
+
   // -------------------------------------------------------------------------------- public methods
-  UniformBuffer(DevicePtr const& device)
-    : mDevice(device) {
-
-    mBuffer = device->createBuffer(
-      sizeof(T),
-      vk::BufferUsageFlagBits::eUniformBuffer | vk::BufferUsageFlagBits::eTransferDst,
-      vk::MemoryPropertyFlagBits::eDeviceLocal);
-  }
-
-  void update(FrameInfo const& info) const {
-    info.mPrimaryCommandBuffer.updateBuffer(*mBuffer->mBuffer, 0, sizeof(T), (uint8_t*)this);
-  }
+  CombinedImageSampler(DevicePtr const& device)
+    : mDevice(device) {}
 
   void bind(vk::DescriptorSet const& descriptorSet) const {
-    vk::DescriptorBufferInfo bufferInfo;
-    bufferInfo.buffer = *mBuffer->mBuffer;
-    bufferInfo.offset = 0;
-    bufferInfo.range  = sizeof(T);
+    vk::DescriptorImageInfo imageInfo;
+    imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+    imageInfo.imageView   = *mTexture->getImageView();
+    imageInfo.sampler     = *mTexture->getSampler();
 
     vk::WriteDescriptorSet info;
     info.dstSet          = descriptorSet;
     info.dstBinding      = T::BINDING_POINT;
     info.dstArrayElement = 0;
-    info.descriptorType  = vk::DescriptorType::eUniformBuffer;
+    info.descriptorType  = vk::DescriptorType::eCombinedImageSampler;
     info.descriptorCount = 1;
-    info.pBufferInfo     = &bufferInfo;
+    info.pImageInfo      = &imageInfo;
 
     mDevice->getVkDevice()->updateDescriptorSets(info, nullptr);
   }
@@ -59,9 +53,8 @@ class UniformBuffer : public T {
  private:
   // ------------------------------------------------------------------------------- private members
   DevicePtr mDevice;
-  BufferPtr mBuffer;
 };
 }
 }
 
-#endif // ILLUSION_GRAPHICS_UNIFORM_BUFFER_HPP
+#endif // ILLUSION_GRAPHICS_COMBINED_IMAGE_SAMPLER_HPP

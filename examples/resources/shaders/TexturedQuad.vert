@@ -10,12 +10,25 @@
 
 #version 450
 
-layout(location = 0) in vec2 fragTexCoord;
+// inputs ------------------------------------------------------------------------------------------
+vec2 positions[4] = vec2[](
+    vec2(-0.5, -0.5),
+    vec2(0.5, -0.5),
+    vec2(-0.5, 0.5),
+    vec2(0.5, 0.5)
+);
 
-layout(binding = 1) uniform sampler2D texSampler;
+// push constants ----------------------------------------------------------------------------------
+layout(push_constant, std430) uniform PushConstants {
+    vec2 pos; 
+    float time;
+} pushConstants;
 
-layout(location = 0) out vec4 outColor;
+// outputs -----------------------------------------------------------------------------------------
+layout(location = 0) out vec2 texcoords;
 
+// methods -----------------------------------------------------------------------------------------
 void main() {
-    outColor = texture(texSampler, fragTexCoord);
+    texcoords = positions[gl_VertexIndex] + 0.5;
+    gl_Position = vec4(positions[gl_VertexIndex] + pushConstants.pos + vec2(0, sin(pushConstants.time)), 0.0, 1.0);
 }

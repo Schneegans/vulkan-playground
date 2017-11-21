@@ -22,8 +22,6 @@ namespace TinyGLTF {
 
 // -------------------------------------------------------------------------------------------------
 
-VkSamplerPtr createSampler(DevicePtr const& device, tinygltf::Sampler const& sampler);
-
 TexturePtr createTexture(
   DevicePtr const& device, tinygltf::Sampler const& sampler, tinygltf::Image const& image);
 

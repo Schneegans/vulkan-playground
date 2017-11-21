@@ -34,17 +34,25 @@ class Texture {
   };
 
   // --------------------------------------------------------------------------------------- methods
-  Texture(DevicePtr const& device, std::string const& fileName);
+  Texture(
+    DevicePtr const& device, std::string const& fileName, vk::SamplerCreateInfo const& sampler);
 
   Texture(
-    DevicePtr const&          device,
-    std::vector<TextureLevel> levels,
-    vk::Format                format,
-    vk::ImageTiling           tiling,
-    vk::ImageUsageFlags       usage,
-    vk::MemoryPropertyFlags   properties,
-    size_t                    size,
-    void*                     data);
+    DevicePtr const&             device,
+    int32_t                      width,
+    int32_t                      height,
+    vk::Format                   format,
+    vk::SamplerCreateInfo const& sampler,
+    size_t                       size,
+    void*                        data);
+
+  Texture(
+    DevicePtr const&             device,
+    std::vector<TextureLevel>    levels,
+    vk::Format                   format,
+    vk::SamplerCreateInfo const& sampler,
+    size_t                       size,
+    void*                        data);
 
   VkImagePtr const&        getImage() const { return mImage; }
   VkDeviceMemoryPtr const& getMemory() const { return mMemory; }
@@ -55,14 +63,12 @@ class Texture {
 
  private:
   void InitData(
-    DevicePtr const&          device,
-    std::vector<TextureLevel> levels,
-    vk::Format                format,
-    vk::ImageTiling           tiling,
-    vk::ImageUsageFlags       usage,
-    vk::MemoryPropertyFlags   properties,
-    size_t                    size,
-    void*                     data);
+    DevicePtr const&             device,
+    std::vector<TextureLevel>    levels,
+    vk::Format                   format,
+    vk::SamplerCreateInfo const& sampler,
+    size_t                       size,
+    void*                        data);
 
   VkImagePtr        mImage;
   VkDeviceMemoryPtr mMemory;

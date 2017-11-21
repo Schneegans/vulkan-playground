@@ -213,6 +213,7 @@ ShaderReflection::ShaderReflection(std::vector<uint32_t> const& code) {
       Sampler sampler;
       sampler.mName    = resource.name;
       sampler.mBinding = parser.get_decoration(resource.id, spv::DecorationBinding);
+      sampler.mSet     = parser.get_decoration(resource.id, spv::DecorationDescriptorSet);
 
       if (activeVariables.find(resource.id) != activeVariables.end()) {
         sampler.mActiveStages = mStages;
@@ -724,7 +725,11 @@ std::string ShaderReflection::Sampler::toInfoString() const {
 
 std::string ShaderReflection::Sampler::toCppString() const {
   std::stringstream sstr;
-  sstr << "const uint32_t binding_" << mName << " = " << mBinding << ";";
+  sstr << "// combined image sampler" << std::endl;
+  sstr << "struct " << mName << " {" << std::endl;
+  sstr << "  static const uint32_t BINDING_POINT = " << mBinding << ";" << std::endl;
+  sstr << "  static const uint32_t DESCRIPTOR_SET = " << mSet << ";" << std::endl;
+  sstr << "};" << std::endl;
   return sstr.str();
 }
 

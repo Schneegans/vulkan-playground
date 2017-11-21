@@ -113,6 +113,7 @@ class ShaderReflection {
   struct Sampler {
     std::string          mName;
     uint32_t             mBinding{0};
+    uint32_t             mSet{0};
     vk::ShaderStageFlags mActiveStages;
 
     std::string toInfoString() const;

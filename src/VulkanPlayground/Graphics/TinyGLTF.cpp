@@ -15,6 +15,7 @@
 
 #include "../Utils/Logger.hpp"
 #include "Device.hpp"
+#include "Texture.hpp"
 
 namespace Illusion {
 namespace Graphics {
@@ -68,13 +69,15 @@ vk::SamplerAddressMode convertSamplerAddressMode(int value) {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-VkSamplerPtr createSampler(DevicePtr const& device, tinygltf::Sampler const& sampler) {
+TexturePtr createTexture(
+  DevicePtr const& device, tinygltf::Sampler const& sampler, tinygltf::Image const& image) {
+
   vk::SamplerCreateInfo info;
-  info.magFilter    = convertFilter(sampler.magFilter);
-  info.minFilter    = convertFilter(sampler.minFilter);
-  info.addressModeU = convertSamplerAddressMode(sampler.wrapS);
-  info.addressModeV = convertSamplerAddressMode(sampler.wrapT);
-  info.addressModeW = vk::SamplerAddressMode::eRepeat; // convertSamplerAddressMode(sampler.wrapR);
+  info.magFilter               = convertFilter(sampler.magFilter);
+  info.minFilter               = convertFilter(sampler.minFilter);
+  info.addressModeU            = convertSamplerAddressMode(sampler.wrapS);
+  info.addressModeV            = convertSamplerAddressMode(sampler.wrapT);
+  info.addressModeW            = vk::SamplerAddressMode::eRepeat;
   info.anisotropyEnable        = true;
   info.maxAnisotropy           = 16;
   info.borderColor             = vk::BorderColor::eIntOpaqueBlack;
@@ -86,13 +89,21 @@ VkSamplerPtr createSampler(DevicePtr const& device, tinygltf::Sampler const& sam
   info.minLod                  = 0.0f;
   info.maxLod                  = 0;
 
-  return device->createVkSampler(info);
+  // if no image data has been loaded, try loading it on out own
+  if (image.image.empty()) { return std::make_shared<Texture>(device, image.uri, info); }
+
+  // if there is image data, create an appropriate texture object for it
+  uint32_t channels = image.image.size() / image.width / image.height;
+
+  return std::make_shared<Texture>(
+    device,
+    image.width,
+    image.height,
+    channels == 3 ? vk::Format::eR8G8B8Unorm : vk::Format::eR8G8B8A8Unorm,
+    info,
+    image.image.size(),
+    (void*)image.image.data());
 }
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-TexturePtr createTexture(
-  DevicePtr const& device, tinygltf::Sampler const& sampler, tinygltf::Image const& image) {}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 }

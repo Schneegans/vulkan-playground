@@ -25,7 +25,14 @@
 #include <iostream>
 #include <thread>
 
-#include "shaders/SimpleTexture.hpp"
+#include "shaders/PBR.hpp"
+
+struct Material {
+  std::shared_ptr<Illusion::Graphics::Texture> mBaseColorTexture;
+  std::shared_ptr<Illusion::Graphics::Texture> mMetallicRoughnessTexture;
+  std::shared_ptr<Illusion::Graphics::Texture> mNormalTexture;
+  std::shared_ptr<Illusion::Graphics::Texture> mOcclusionTexture;
+};
 
 int main(int argc, char* argv[]) {
   try {
@@ -66,27 +73,21 @@ int main(int argc, char* argv[]) {
       if (!success) { return -1; }
     }
 
-    Illusion::ILLUSION_MESSAGE << "accessors: " << model.accessors.size() << std::endl;
-    Illusion::ILLUSION_MESSAGE << "animations: " << model.animations.size() << std::endl;
-    Illusion::ILLUSION_MESSAGE << "buffers: " << model.buffers.size() << std::endl;
-    Illusion::ILLUSION_MESSAGE << "bufferViews: " << model.bufferViews.size() << std::endl;
-    Illusion::ILLUSION_MESSAGE << "materials: " << model.materials.size() << std::endl;
-    Illusion::ILLUSION_MESSAGE << "meshes: " << model.meshes.size() << std::endl;
-    Illusion::ILLUSION_MESSAGE << "nodes: " << model.nodes.size() << std::endl;
-    Illusion::ILLUSION_MESSAGE << "textures: " << model.textures.size() << std::endl;
-    Illusion::ILLUSION_MESSAGE << "images: " << model.images.size() << std::endl;
-    Illusion::ILLUSION_MESSAGE << "skins: " << model.skins.size() << std::endl;
-    Illusion::ILLUSION_MESSAGE << "samplers: " << model.samplers.size() << std::endl;
-    Illusion::ILLUSION_MESSAGE << "cameras: " << model.cameras.size() << std::endl;
-    Illusion::ILLUSION_MESSAGE << "scenes: " << model.scenes.size() << std::endl;
-    Illusion::ILLUSION_MESSAGE << "lights: " << model.lights.size() << std::endl;
-    Illusion::ILLUSION_MESSAGE << "extensionsUsed: " << model.extensionsUsed.size() << std::endl;
-    Illusion::ILLUSION_MESSAGE << "extensionsRequired: " << model.extensionsRequired.size()
-                               << std::endl;
-    Illusion::ILLUSION_MESSAGE << "defaultScene: " << model.defaultScene << std::endl;
+    // create the pipeline -------------------------------------------------------------------------
+    window->open(false);
+
+    auto surface{window->getSurface()};
+
+    std::vector<std::string> shaderModules{"data/shaders/PBR.vert.spv",
+                                           "data/shaders/PBR.frag.spv"};
+
+    auto pipeline{std::make_shared<Illusion::Graphics::Pipeline>(
+      device, surface->getRenderPass(), shaderModules, 10)};
+
+    // create the materials ------------------------------------------------------------------------
+    std::vector<Material> materials;
 
     for (auto material : model.materials) {
-      Illusion::ILLUSION_MESSAGE << "Material: " << material.name << std::endl;
       auto getTextureIndex = [](tinygltf::ParameterMap const& matParams, std::string const& name) {
         auto texIt = matParams.find(name);
         if (texIt == matParams.end()) return -1;
@@ -95,30 +96,38 @@ int main(int argc, char* argv[]) {
         return static_cast<int>(idxIt->second);
       };
 
-      int baseColorTexture         = getTextureIndex(material.values, "baseColorTexture");
-      int metallicRoughnessTexture = getTextureIndex(material.values, "metallicRoughnessTexture");
-      int normalTexture            = getTextureIndex(material.additionalValues, "normalTexture");
-      int occlusionTexture         = getTextureIndex(material.additionalValues, "occlusionTexture");
+      Material m;
+      {
+        int index{getTextureIndex(material.values, "baseColorTexture")};
+        m.mBaseColorTexture = Illusion::Graphics::TinyGLTF::createTexture(
+          device,
+          model.samplers[model.textures[index].sampler],
+          model.images[model.textures[index].source]);
+      }
+      {
+        int index{getTextureIndex(material.values, "metallicRoughnessTexture")};
+        m.mMetallicRoughnessTexture = Illusion::Graphics::TinyGLTF::createTexture(
+          device,
+          model.samplers[model.textures[index].sampler],
+          model.images[model.textures[index].source]);
+      }
+      {
+        int index{getTextureIndex(material.additionalValues, "normalTexture")};
+        m.mNormalTexture = Illusion::Graphics::TinyGLTF::createTexture(
+          device,
+          model.samplers[model.textures[index].sampler],
+          model.images[model.textures[index].source]);
+      }
+      {
+        int index{getTextureIndex(material.additionalValues, "occlusionTexture")};
+        m.mOcclusionTexture = Illusion::Graphics::TinyGLTF::createTexture(
+          device,
+          model.samplers[model.textures[index].sampler],
+          model.images[model.textures[index].source]);
+      }
 
-      auto sampler = Illusion::Graphics::TinyGLTF::createSampler(
-        device, model.samplers[model.textures[metallicRoughnessTexture].sampler]);
-
-      auto texture = Illusion::Graphics::TinyGLTF::createTexture(
-        device,
-        model.samplers[model.textures[metallicRoughnessTexture].sampler],
-        model.images[model.textures[metallicRoughnessTexture].source]);
+      materials.push_back(m);
     }
-
-    // create the pipeline -------------------------------------------------------------------------
-    window->open(false);
-
-    auto surface{window->getSurface()};
-
-    std::vector<std::string> shaderModules{"data/shaders/texture.vert.spv",
-                                           "data/shaders/texture.frag.spv"};
-
-    auto pipeline{std::make_shared<Illusion::Graphics::Pipeline>(
-      device, surface->getRenderPass(), shaderModules, 10)};
 
     // while (!window->shouldClose()) {
     //   window->processInput();
