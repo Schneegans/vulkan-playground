@@ -19,6 +19,7 @@
 #include <GLFW/glfw3.h>
 
 #include <gli/gli.hpp>
+#include <stb_image.h>
 
 #include <iostream>
 #include <set>
@@ -82,28 +83,106 @@ void Device::endSingleTimeCommands(vk::CommandBuffer commandBuffer) const {
 
 TexturePtr Device::createTexture(std::string const& fileName) const {
 
+  // first try loading with gli
   gli::texture texture = gli::load(fileName);
-  if (texture.empty()) { throw std::runtime_error{"Failed to load texture " + fileName + "!"}; }
+  if (!texture.empty()) {
+    std::vector<TextureLevel> levels;
+    for (uint32_t i{0}; i < texture.levels(); ++i) {
+      levels.push_back({texture.extent(i).x, texture.extent(i).y, texture.size(i)});
+    }
+
+    return createTexture(
+      levels,
+      (vk::Format)texture.format(),
+      vk::ImageTiling::eOptimal,
+      vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst,
+      vk::MemoryPropertyFlagBits::eDeviceLocal,
+      texture.size(),
+      texture.data());
+  }
+
+  // then try stb_image
+  int   width, height, components, bytes;
+  void* data;
+
+  if (stbi_is_hdr(fileName.c_str())) {
+    data  = stbi_loadf(fileName.c_str(), &width, &height, &components, 0);
+    bytes = 4;
+  } else {
+    data  = stbi_load(fileName.c_str(), &width, &height, &components, 0);
+    bytes = 1;
+  }
+
+  if (data) {
+    uint64_t                  size = width * height * bytes * components;
+    std::vector<TextureLevel> levels;
+    levels.push_back({width, height, size});
+
+    vk::Format format;
+    if (components == 1) {
+      if (bytes == 1)
+        format = vk::Format::eR8Unorm;
+      else
+        format = vk::Format::eR32Sfloat;
+    } else if (components == 2) {
+      if (bytes == 1)
+        format = vk::Format::eR8G8Unorm;
+      else
+        format = vk::Format::eR32G32Sfloat;
+    } else if (components == 3) {
+      if (bytes == 1)
+        format = vk::Format::eR8G8B8Unorm;
+      else
+        format = vk::Format::eR32G32B32Sfloat;
+    } else {
+      if (bytes == 1)
+        format = vk::Format::eR8G8B8A8Unorm;
+      else
+        format = vk::Format::eR32G32B32A32Sfloat;
+    }
+
+    auto texture = createTexture(
+      levels,
+      format,
+      vk::ImageTiling::eOptimal,
+      vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst,
+      vk::MemoryPropertyFlagBits::eDeviceLocal,
+      size,
+      data);
+
+    stbi_image_free(data);
+
+    return texture;
+  }
+
+  std::string error(stbi_failure_reason());
+
+  throw std::runtime_error{"Failed to load texture " + fileName + ": " + error};
+}
+
+TexturePtr Device::createTexture(
+  std::vector<TextureLevel> levels,
+  vk::Format                format,
+  vk::ImageTiling           tiling,
+  vk::ImageUsageFlags       usage,
+  vk::MemoryPropertyFlags   properties,
+  size_t                    size,
+  void*                     data) const {
 
   auto stagingBuffer = createBuffer(
-    texture.size(),
+    size,
     vk::BufferUsageFlagBits::eTransferSrc,
     vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
 
-  void* data = mVkDevice->mapMemory(*stagingBuffer->mMemory, 0, texture.size());
-  std::memcpy(data, texture.data(), texture.size());
+  void* dst = mVkDevice->mapMemory(*stagingBuffer->mMemory, 0, size);
+  std::memcpy(dst, data, size);
   mVkDevice->unmapMemory(*stagingBuffer->mMemory);
 
-  ILLUSION_DEBUG << "Loading texture " << fileName << std::endl;
-  ILLUSION_DEBUG << "  Format:  " << vk::to_string((vk::Format)texture.format()) << std::endl;
-  ILLUSION_DEBUG << "  Size:    " << texture.extent().x << "x" << texture.extent().y << std::endl;
-  ILLUSION_DEBUG << "  MipMaps: " << texture.levels() << std::endl;
-
   auto result = createTexture(
-    texture.extent().x,
-    texture.extent().y,
-    texture.levels(),
-    (vk::Format)texture.format(),
+    levels[0].mWidth,
+    levels[0].mHeight,
+    levels.size(),
+    format,
     vk::ImageTiling::eOptimal,
     vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst,
     vk::MemoryPropertyFlagBits::eDeviceLocal);
@@ -111,7 +190,7 @@ TexturePtr Device::createTexture(std::string const& fileName) const {
   vk::ImageSubresourceRange subresourceRange;
   subresourceRange.aspectMask   = vk::ImageAspectFlagBits::eColor;
   subresourceRange.baseMipLevel = 0;
-  subresourceRange.levelCount   = texture.levels();
+  subresourceRange.levelCount   = levels.size();
   subresourceRange.layerCount   = 1;
 
   transitionImageLayout(
@@ -123,22 +202,22 @@ TexturePtr Device::createTexture(std::string const& fileName) const {
   auto buffer = beginSingleTimeCommands();
 
   std::vector<vk::BufferImageCopy> infos;
-  uint32_t                         offset = 0;
+  uint64_t                         offset = 0;
 
-  for (uint32_t i = 0; i < texture.levels(); ++i) {
+  for (uint32_t i = 0; i < levels.size(); ++i) {
     vk::BufferImageCopy info;
     info.imageSubresource.aspectMask     = vk::ImageAspectFlagBits::eColor;
     info.imageSubresource.mipLevel       = i;
     info.imageSubresource.baseArrayLayer = 0;
     info.imageSubresource.layerCount     = 1;
-    info.imageExtent.width               = texture.extent(i).x;
-    info.imageExtent.height              = texture.extent(i).y;
+    info.imageExtent.width               = levels[i].mWidth;
+    info.imageExtent.height              = levels[i].mHeight;
     info.imageExtent.depth               = 1;
     info.bufferOffset                    = offset;
 
     infos.push_back(info);
 
-    offset += static_cast<uint32_t>(texture.size(i));
+    offset += levels[i].mSize;
   }
 
   buffer.copyBufferToImage(

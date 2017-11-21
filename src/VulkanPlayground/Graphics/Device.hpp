@@ -37,6 +37,12 @@ struct Buffer {
   VkDeviceMemoryPtr mMemory;
 };
 
+struct TextureLevel {
+  int32_t  mWidth;
+  int32_t  mHeight;
+  uint64_t mSize;
+};
+
 // -------------------------------------------------------------------------------------------------
 class Device {
 
@@ -49,6 +55,16 @@ class Device {
   void endSingleTimeCommands(vk::CommandBuffer commandBuffer) const;
 
   TexturePtr createTexture(std::string const& fileName) const;
+
+  TexturePtr createTexture(
+    std::vector<TextureLevel> levels,
+    vk::Format                format,
+    vk::ImageTiling           tiling,
+    vk::ImageUsageFlags       usage,
+    vk::MemoryPropertyFlags   properties,
+    size_t                    size,
+    void*                     data) const;
+
   TexturePtr createTexture(
     uint32_t                width,
     uint32_t                height,

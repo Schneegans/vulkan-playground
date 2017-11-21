@@ -56,6 +56,16 @@ call third-party\make_tinygltf.bat Release
 call third-party\make_tinygltf.bat Debug
 @echo off
 
+echo ""
+echo "-------------------------------------------------------------------------"
+echo "--------------------------- Copying stb ----------------------------------"
+echo "-------------------------------------------------------------------------"
+echo ""
+call third-party\make_stb.bat Release
+@echo off
+call third-party\make_stb.bat Debug
+@echo off
+
 cd "%CURRENT_DIR%"
 
 @echo on

@@ -51,3 +51,11 @@ echo "-------------------------------------------------------------------------"
 echo ""
 $SCRIPT_DIR/third-party/make_tinygltf.sh Release
 $SCRIPT_DIR/third-party/make_tinygltf.sh Debug
+
+echo ""
+echo "-------------------------------------------------------------------------"
+echo "---------------------------- Copying stb --------------------------------"
+echo "-------------------------------------------------------------------------"
+echo ""
+$SCRIPT_DIR/third-party/make_stb.sh Release
+$SCRIPT_DIR/third-party/make_stb.sh Debug
