@@ -18,9 +18,6 @@
 
 #include <GLFW/glfw3.h>
 
-#include <gli/gli.hpp>
-#include <stb_image.h>
-
 #include <iostream>
 #include <set>
 
@@ -80,213 +77,6 @@ void Device::endSingleTimeCommands(vk::CommandBuffer commandBuffer) const {
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-
-TexturePtr Device::createTexture(std::string const& fileName) const {
-
-  // first try loading with gli
-  gli::texture texture = gli::load(fileName);
-  if (!texture.empty()) {
-    std::vector<TextureLevel> levels;
-    for (uint32_t i{0}; i < texture.levels(); ++i) {
-      levels.push_back({texture.extent(i).x, texture.extent(i).y, texture.size(i)});
-    }
-
-    return createTexture(
-      levels,
-      (vk::Format)texture.format(),
-      vk::ImageTiling::eOptimal,
-      vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst,
-      vk::MemoryPropertyFlagBits::eDeviceLocal,
-      texture.size(),
-      texture.data());
-  }
-
-  // then try stb_image
-  int   width, height, components, bytes;
-  void* data;
-
-  if (stbi_is_hdr(fileName.c_str())) {
-    data  = stbi_loadf(fileName.c_str(), &width, &height, &components, 0);
-    bytes = 4;
-  } else {
-    data  = stbi_load(fileName.c_str(), &width, &height, &components, 0);
-    bytes = 1;
-  }
-
-  if (data) {
-    uint64_t                  size = width * height * bytes * components;
-    std::vector<TextureLevel> levels;
-    levels.push_back({width, height, size});
-
-    vk::Format format;
-    if (components == 1) {
-      if (bytes == 1)
-        format = vk::Format::eR8Unorm;
-      else
-        format = vk::Format::eR32Sfloat;
-    } else if (components == 2) {
-      if (bytes == 1)
-        format = vk::Format::eR8G8Unorm;
-      else
-        format = vk::Format::eR32G32Sfloat;
-    } else if (components == 3) {
-      if (bytes == 1)
-        format = vk::Format::eR8G8B8Unorm;
-      else
-        format = vk::Format::eR32G32B32Sfloat;
-    } else {
-      if (bytes == 1)
-        format = vk::Format::eR8G8B8A8Unorm;
-      else
-        format = vk::Format::eR32G32B32A32Sfloat;
-    }
-
-    auto texture = createTexture(
-      levels,
-      format,
-      vk::ImageTiling::eOptimal,
-      vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst,
-      vk::MemoryPropertyFlagBits::eDeviceLocal,
-      size,
-      data);
-
-    stbi_image_free(data);
-
-    return texture;
-  }
-
-  std::string error(stbi_failure_reason());
-
-  throw std::runtime_error{"Failed to load texture " + fileName + ": " + error};
-}
-
-TexturePtr Device::createTexture(
-  std::vector<TextureLevel> levels,
-  vk::Format                format,
-  vk::ImageTiling           tiling,
-  vk::ImageUsageFlags       usage,
-  vk::MemoryPropertyFlags   properties,
-  size_t                    size,
-  void*                     data) const {
-
-  auto stagingBuffer = createBuffer(
-    size,
-    vk::BufferUsageFlagBits::eTransferSrc,
-    vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
-
-  void* dst = mVkDevice->mapMemory(*stagingBuffer->mMemory, 0, size);
-  std::memcpy(dst, data, size);
-  mVkDevice->unmapMemory(*stagingBuffer->mMemory);
-
-  auto result = createTexture(
-    levels[0].mWidth,
-    levels[0].mHeight,
-    levels.size(),
-    format,
-    vk::ImageTiling::eOptimal,
-    vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst,
-    vk::MemoryPropertyFlagBits::eDeviceLocal);
-
-  vk::ImageSubresourceRange subresourceRange;
-  subresourceRange.aspectMask   = vk::ImageAspectFlagBits::eColor;
-  subresourceRange.baseMipLevel = 0;
-  subresourceRange.levelCount   = levels.size();
-  subresourceRange.layerCount   = 1;
-
-  transitionImageLayout(
-    result->mImage,
-    vk::ImageLayout::eUndefined,
-    vk::ImageLayout::eTransferDstOptimal,
-    subresourceRange);
-
-  auto buffer = beginSingleTimeCommands();
-
-  std::vector<vk::BufferImageCopy> infos;
-  uint64_t                         offset = 0;
-
-  for (uint32_t i = 0; i < levels.size(); ++i) {
-    vk::BufferImageCopy info;
-    info.imageSubresource.aspectMask     = vk::ImageAspectFlagBits::eColor;
-    info.imageSubresource.mipLevel       = i;
-    info.imageSubresource.baseArrayLayer = 0;
-    info.imageSubresource.layerCount     = 1;
-    info.imageExtent.width               = levels[i].mWidth;
-    info.imageExtent.height              = levels[i].mHeight;
-    info.imageExtent.depth               = 1;
-    info.bufferOffset                    = offset;
-
-    infos.push_back(info);
-
-    offset += levels[i].mSize;
-  }
-
-  buffer.copyBufferToImage(
-    *stagingBuffer->mBuffer, *result->mImage, vk::ImageLayout::eTransferDstOptimal, infos);
-
-  endSingleTimeCommands(buffer);
-
-  transitionImageLayout(
-    result->mImage,
-    vk::ImageLayout::eTransferDstOptimal,
-    vk::ImageLayout::eShaderReadOnlyOptimal,
-    subresourceRange);
-
-  return result;
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-TexturePtr Device::createTexture(
-  uint32_t                width,
-  uint32_t                height,
-  uint32_t                levels,
-  vk::Format              format,
-  vk::ImageTiling         tiling,
-  vk::ImageUsageFlags     usage,
-  vk::MemoryPropertyFlags properties) const {
-  auto image = createImage(width, height, levels, format, tiling, usage, properties);
-
-  auto result     = std::make_shared<Texture>();
-  result->mImage  = image->mImage;
-  result->mMemory = image->mMemory;
-
-  {
-    vk::ImageViewCreateInfo info;
-    info.image                           = *image->mImage;
-    info.viewType                        = vk::ImageViewType::e2D;
-    info.format                          = format;
-    info.subresourceRange.aspectMask     = vk::ImageAspectFlagBits::eColor;
-    info.subresourceRange.baseMipLevel   = 0;
-    info.subresourceRange.levelCount     = levels;
-    info.subresourceRange.baseArrayLayer = 0;
-    info.subresourceRange.layerCount     = 1;
-
-    result->mImageView = createVkImageView(info);
-  }
-
-  {
-    vk::SamplerCreateInfo info;
-    info.magFilter               = vk::Filter::eLinear;
-    info.minFilter               = vk::Filter::eLinear;
-    info.addressModeU            = vk::SamplerAddressMode::eRepeat;
-    info.addressModeV            = vk::SamplerAddressMode::eRepeat;
-    info.addressModeW            = vk::SamplerAddressMode::eRepeat;
-    info.anisotropyEnable        = true;
-    info.maxAnisotropy           = 16;
-    info.borderColor             = vk::BorderColor::eIntOpaqueBlack;
-    info.unnormalizedCoordinates = false;
-    info.compareEnable           = false;
-    info.compareOp               = vk::CompareOp::eAlways;
-    info.mipmapMode              = vk::SamplerMipmapMode::eLinear;
-    info.mipLodBias              = 0.0f;
-    info.minLod                  = 0.0f;
-    info.maxLod                  = levels;
-
-    result->mSampler = createVkSampler(info);
-  }
-
-  return result;
-}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -513,7 +303,10 @@ VkSwapchainKHRPtr Device::createVkSwapChainKhr(vk::SwapchainCreateInfoKHR const&
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 BufferPtr Device::createBuffer(
-  vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties) const {
+  vk::DeviceSize          size,
+  vk::BufferUsageFlags    usage,
+  vk::MemoryPropertyFlags properties,
+  void*                   data) const {
 
   auto result = std::make_shared<Buffer>();
 
@@ -538,6 +331,12 @@ BufferPtr Device::createBuffer(
   }
 
   mVkDevice->bindBufferMemory(*result->mBuffer, *result->mMemory, 0);
+
+  if (data) {
+    void* dst = mVkDevice->mapMemory(*result->mMemory, 0, size);
+    std::memcpy(dst, data, size);
+    mVkDevice->unmapMemory(*result->mMemory);
+  }
 
   return result;
 }

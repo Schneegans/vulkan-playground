@@ -25,22 +25,9 @@ struct Image {
   VkDeviceMemoryPtr mMemory;
 };
 
-struct Texture {
-  VkImagePtr        mImage;
-  VkDeviceMemoryPtr mMemory;
-  VkImageViewPtr    mImageView;
-  VkSamplerPtr      mSampler;
-};
-
 struct Buffer {
   VkBufferPtr       mBuffer;
   VkDeviceMemoryPtr mMemory;
-};
-
-struct TextureLevel {
-  int32_t  mWidth;
-  int32_t  mHeight;
-  uint64_t mSize;
 };
 
 // -------------------------------------------------------------------------------------------------
@@ -54,26 +41,6 @@ class Device {
   vk::CommandBuffer beginSingleTimeCommands() const;
   void endSingleTimeCommands(vk::CommandBuffer commandBuffer) const;
 
-  TexturePtr createTexture(std::string const& fileName) const;
-
-  TexturePtr createTexture(
-    std::vector<TextureLevel> levels,
-    vk::Format                format,
-    vk::ImageTiling           tiling,
-    vk::ImageUsageFlags       usage,
-    vk::MemoryPropertyFlags   properties,
-    size_t                    size,
-    void*                     data) const;
-
-  TexturePtr createTexture(
-    uint32_t                width,
-    uint32_t                height,
-    uint32_t                levels,
-    vk::Format              format,
-    vk::ImageTiling         tiling,
-    vk::ImageUsageFlags     usage,
-    vk::MemoryPropertyFlags properties) const;
-
   ImagePtr createImage(
     uint32_t                width,
     uint32_t                height,
@@ -84,7 +51,10 @@ class Device {
     vk::MemoryPropertyFlags properties) const;
 
   BufferPtr createBuffer(
-    vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties) const;
+    vk::DeviceSize          size,
+    vk::BufferUsageFlags    usage,
+    vk::MemoryPropertyFlags properties,
+    void*                   data = nullptr) const;
 
   VkBufferPtr         createVkBuffer(vk::BufferCreateInfo const&) const;
   VkCommandPoolPtr    createVkCommandPool(vk::CommandPoolCreateInfo const&) const;

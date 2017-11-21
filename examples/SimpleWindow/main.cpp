@@ -15,6 +15,7 @@
 #include <VulkanPlayground/Graphics/Pipeline.hpp>
 #include <VulkanPlayground/Graphics/ShaderReflection.hpp>
 #include <VulkanPlayground/Graphics/Surface.hpp>
+#include <VulkanPlayground/Graphics/Texture.hpp>
 #include <VulkanPlayground/Graphics/UniformBuffer.hpp>
 #include <VulkanPlayground/Graphics/Window.hpp>
 
@@ -47,7 +48,7 @@ int main(int argc, char* argv[]) {
     std::cout << "sizeof(PushConstants) = " << sizeof(Reflection::SimpleTexture::PushConstants)
               << std::endl;
 
-    auto texture = device->createTexture("data/textures/box.dds");
+    auto texture = std::make_shared<Illusion::Graphics::Texture>(device, "data/textures/box.dds");
 
     auto descriptorSet{pipeline->allocateDescriptorSet()};
 
@@ -60,8 +61,8 @@ int main(int argc, char* argv[]) {
     {
       vk::DescriptorImageInfo imageInfo;
       imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
-      imageInfo.imageView   = *texture->mImageView;
-      imageInfo.sampler     = *texture->mSampler;
+      imageInfo.imageView   = *texture->getImageView();
+      imageInfo.sampler     = *texture->getSampler();
 
       vk::WriteDescriptorSet info;
       info.dstSet          = descriptorSet;
