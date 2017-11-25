@@ -31,7 +31,6 @@ class ShaderReflection {
 
  public:
   // -------------------------------------------------------------------------------- public classes
-
   struct BufferRange {
     enum class BaseType { eUnknown, eInt, eUInt, eFloat, eDouble, eStruct };
 
@@ -73,8 +72,9 @@ class ShaderReflection {
     // until the alignment boundary of the struct is hit
     uint32_t getInternalPadding() const;
 
-    // size in bytes excluding padding and stride
-    uint32_t    getBaseSize() const;
+    // size of all elements in bytes excluding padding and stride
+    uint32_t getBaseSize() const;
+
     std::string getTypePrefix() const;
     std::string getElementsPostfix() const;
     std::string getArrayPostfix() const;
@@ -133,7 +133,9 @@ class ShaderReflection {
 
   vk::ShaderStageFlags       getStages() const { return mStages; }
   std::vector<Buffer> const& getBuffers(BufferType type) const;
-  std::vector<Sampler> const& getSamplers() const { return mSamplers; }
+  std::vector<Sampler> const&     getSamplers() const { return mSamplers; }
+  std::vector<BufferRange> const& getInputs() const { return mInputs; }
+  std::vector<BufferRange> const& getOutputs() const { return mOutputs; }
 
  private:
   // ------------------------------------------------------------------------------- private methods
@@ -142,9 +144,11 @@ class ShaderReflection {
   // ------------------------------------------------------------------------------- private members
   vk::ShaderStageFlags mStages;
 
-  std::vector<Buffer>  mPushConstantBuffers;
-  std::vector<Buffer>  mUniformBuffers;
-  std::vector<Sampler> mSamplers;
+  std::vector<Buffer>      mPushConstantBuffers;
+  std::vector<Buffer>      mUniformBuffers;
+  std::vector<Sampler>     mSamplers;
+  std::vector<BufferRange> mInputs;
+  std::vector<BufferRange> mOutputs;
 };
 }
 }

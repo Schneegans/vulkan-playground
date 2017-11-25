@@ -84,12 +84,14 @@ Pipeline::Pipeline(
       pools.push_back(pool);
     }
 
-    vk::DescriptorPoolCreateInfo info;
-    info.poolSizeCount = static_cast<uint32_t>(pools.size());
-    info.pPoolSizes    = pools.data();
-    info.maxSets       = materialCount;
+    if (pools.size() > 0) {
+      vk::DescriptorPoolCreateInfo info;
+      info.poolSizeCount = static_cast<uint32_t>(pools.size());
+      info.pPoolSizes    = pools.data();
+      info.maxSets       = materialCount;
 
-    mVkDescriptorPool = mDevice->createVkDescriptorPool(info);
+      mVkDescriptorPool = mDevice->createVkDescriptorPool(info);
+    }
   }
 
   // vertex input ----------------------------------------------------------------------------------
@@ -229,8 +231,14 @@ Pipeline::~Pipeline() { mDevice->getVkDevice()->waitIdle(); }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void Pipeline::use(FrameInfo const& info, vk::DescriptorSet const& descriptorSet) const {
+void Pipeline::bind(FrameInfo const& info) const {
   info.mPrimaryCommandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *mVkPipeline);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void Pipeline::useDescriptorSet(
+  FrameInfo const& info, vk::DescriptorSet const& descriptorSet) const {
   info.mPrimaryCommandBuffer.bindDescriptorSets(
     vk::PipelineBindPoint::eGraphics, *mVkPipelineLayout, 0, descriptorSet, nullptr);
 }
@@ -240,9 +248,9 @@ void Pipeline::use(FrameInfo const& info, vk::DescriptorSet const& descriptorSet
 void Pipeline::setPushConstant(
   FrameInfo const&     info,
   vk::ShaderStageFlags stages,
-  uint32_t             offset,
   uint32_t             size,
-  uint8_t*             data) const {
+  uint8_t*             data,
+  uint32_t             offset) const {
 
   info.mPrimaryCommandBuffer.pushConstants(*mVkPipelineLayout, stages, offset, size, data);
 }
@@ -250,6 +258,10 @@ void Pipeline::setPushConstant(
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 vk::DescriptorSet Pipeline::allocateDescriptorSet() const {
+  if (!mVkDescriptorPool) {
+    throw std::runtime_error{"Cannot allocated DescriptorSet: DescriptorSetLayout is empty!"};
+  }
+
   vk::DescriptorSetLayout       descriptorSetLayouts[] = {*mVkDescriptorSetLayout};
   vk::DescriptorSetAllocateInfo info;
   info.descriptorPool     = *mVkDescriptorPool;
@@ -262,6 +274,10 @@ vk::DescriptorSet Pipeline::allocateDescriptorSet() const {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void Pipeline::freeDescriptorSet(vk::DescriptorSet const& set) const {
+  if (!mVkDescriptorPool) {
+    throw std::runtime_error{"Cannot free DescriptorSet: DescriptorSetLayout is empty!"};
+  }
+
   mDevice->getVkDevice()->freeDescriptorSets(*mVkDescriptorPool, set);
 }
 

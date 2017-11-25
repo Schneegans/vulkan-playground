@@ -18,8 +18,9 @@ add_subdirectory("resources/shaders")
 
 # -------------------------------------------------------------------------------- make each example
 set(ENABLED_EXAMPLES
-  "TexturedQuad"
   "ModelViewer"
+  "TexturedQuad"
+  "VertexData"
 )
 
 foreach(EXAMPLE ${ENABLED_EXAMPLES})

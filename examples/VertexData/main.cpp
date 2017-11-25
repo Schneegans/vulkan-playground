@@ -21,7 +21,7 @@
 #include <iostream>
 #include <thread>
 
-#include "shaders/TexturedQuad.hpp"
+#include "shaders/VertexColors.hpp"
 
 int main(int argc, char* argv[]) {
   try {
@@ -33,21 +33,12 @@ int main(int argc, char* argv[]) {
 
     auto surface = window->getSurface();
 
-    std::vector<std::string> shader{"data/shaders/TexturedQuad.vert.spv",
-                                    "data/shaders/TexturedQuad.frag.spv"};
+    std::vector<std::string> shader{"data/shaders/VertexColors.vert.spv",
+                                    "data/shaders/VertexColors.frag.spv"};
     auto pipeline =
       std::make_shared<Illusion::Graphics::Pipeline>(device, surface->getRenderPass(), shader, 10);
 
-    auto texture = std::make_shared<Illusion::Graphics::Texture>(
-      device, "data/textures/box.dds", vk::SamplerCreateInfo());
-
-    auto descriptorSet = pipeline->allocateDescriptorSet();
-
-    Illusion::Graphics::CombinedImageSampler<Reflection::TexturedQuad::texSampler> sampler(device);
-    sampler.mTexture = texture;
-    sampler.bind(descriptorSet);
-
-    Reflection::TexturedQuad::PushConstants pushConstants;
+    Reflection::VertexColors::PushConstants pushConstants;
     pushConstants.pos = glm::vec2(0.2, 0.5);
 
     while (!window->shouldClose()) {
@@ -58,7 +49,6 @@ int main(int argc, char* argv[]) {
 
       pushConstants.time += 0.01;
       pipeline->bind(frame);
-      pipeline->useDescriptorSet(frame, descriptorSet);
       pipeline->setPushConstant(frame, pushConstants);
       frame.mPrimaryCommandBuffer.draw(4, 1, 0, 0);
 

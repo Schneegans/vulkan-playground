@@ -21,9 +21,9 @@ namespace {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-class MyCompiler : public spirv_cross::CompilerGLSL {
+class Parser : public spirv_cross::CompilerGLSL {
  public:
-  MyCompiler(std::vector<uint32_t> const& ir)
+  Parser(std::vector<uint32_t> const& ir)
     : spirv_cross::CompilerGLSL(ir) {}
 
   uint32_t getAlignment(
@@ -52,7 +52,7 @@ class MyCompiler : public spirv_cross::CompilerGLSL {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-std::string toString(vk::ShaderStageFlags stages) {
+std::string stagesToInfoString(vk::ShaderStageFlags stages) {
   std::string result;
 
   auto addStage = [&](std::string const& name, vk::ShaderStageFlags stage) {
@@ -70,6 +70,33 @@ std::string toString(vk::ShaderStageFlags stages) {
   addStage("Vertex", vk::ShaderStageFlagBits::eVertex);
 
   if (result.size() == 0) { result = "None"; }
+
+  return result;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+std::string stagesToCppString(vk::ShaderStageFlags stages) {
+  std::string result;
+
+  auto addStage = [&](std::string const& name, vk::ShaderStageFlags stage) {
+    if ((VkShaderStageFlags)(stages & stage) > 0) {
+      if (result.size() > 0) { result += " | "; }
+      result += name;
+    }
+  };
+
+  addStage("VK_SHADER_STAGE_COMPUTE_BIT", vk::ShaderStageFlagBits::eCompute);
+  addStage("VK_SHADER_STAGE_FRAGMENT_BIT", vk::ShaderStageFlagBits::eFragment);
+  addStage("VK_SHADER_STAGE_GEOMETRY_BIT", vk::ShaderStageFlagBits::eGeometry);
+  addStage(
+    "VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT", vk::ShaderStageFlagBits::eTessellationControl);
+  addStage(
+    "VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT",
+    vk::ShaderStageFlagBits::eTessellationEvaluation);
+  addStage("VK_SHADER_STAGE_VERTEX_BIT", vk::ShaderStageFlagBits::eVertex);
+
+  if (result.size() == 0) { result = "0"; }
 
   return result;
 }
@@ -100,7 +127,7 @@ ShaderReflection::BufferRange::BaseType convert(spirv_cross::SPIRType type) {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 ShaderReflection::ShaderReflection(std::vector<uint32_t> const& code) {
-  MyCompiler                   parser{code};
+  Parser                       parser{code};
   spirv_cross::ShaderResources resources       = parser.get_shader_resources();
   auto                         activeVariables = parser.get_active_interface_variables();
 
@@ -226,6 +253,56 @@ ShaderReflection::ShaderReflection(std::vector<uint32_t> const& code) {
 
   mSamplers = getSamplers(resources.sampled_images);
 
+  // collect in- and outputs -----------------------------------------------------------------------
+  // auto getInAndOutputs = [&](std::vector<spirv_cross::Resource> const& resources) {
+  //   std::vector<BufferRange> result;
+  //   for (auto const& resource : resources) {
+  //     BufferRange range;
+  //     auto        memberType = parser.get_type(type.member_types[i]);
+  //     uint32_t    flags      = parser.get_member_decoration_mask(type.self, i);
+
+  //     range.mName      = parser.get_member_name(type.self, i);
+  //     range.mSize      = parser.get_declared_struct_member_size(type, i);
+  //     range.mOffset    = parser.type_struct_member_offset(type, i);
+  //     range.mAlignment = parser.getAlignment(memberType, packing, flags);
+
+  //     for (auto const& activeRange : activeRanges) {
+  //       if (activeRange.index == i) { range.mActiveStages = mStages; }
+  //     }
+
+  //     range.mBaseType = convert(memberType);
+  //     range.mBaseSize = memberType.width / 8;
+
+  //     // vector types
+  //     range.mElements = memberType.vecsize;
+
+  //     // matrix types
+  //     if (parser.has_member_decoration(type.self, i, spv::Decoration::DecorationMatrixStride)) {
+  //       range.mColumns      = memberType.columns;
+  //       range.mRows         = memberType.vecsize;
+  //       range.mMatrixStride = parser.type_struct_member_matrix_stride(type, i);
+  //     }
+
+  //     // array types
+  //     if (!memberType.array.empty()) {
+  //       range.mArrayLengths = memberType.array;
+  //       range.mArrayStride  = parser.type_struct_member_array_stride(type, i);
+  //     }
+
+  //     // struct types
+  //     if (range.mBaseType == BufferRange::BaseType::eStruct) {
+  //       range.mTypeName = parser.get_name(memberType.self);
+  //       range.mMembers  = getBufferRanges(type.member_types[i], {}, packing);
+  //     }
+
+  //     ranges.push_back(range);
+  //   }
+  //   return result;
+  // };
+
+  // mInputs  = getInAndOutputs(resources.stage_inputs);
+  // mOutputs = getInAndOutputs(resources.stage_outputs);
+
   // warn if not supported features are used -------------------------------------------------------
   auto errorNotSupported =
     [this](std::string const& name, std::vector<spirv_cross::Resource> const& resources) {
@@ -264,7 +341,8 @@ void ShaderReflection::merge(ShaderReflection const& stage) {
 
   // check that we do not have such a stage already
   if ((VkShaderStageFlags)(mStages & stage.mStages) > 0) {
-    throw std::runtime_error{toString(stage.mStages) + " shader stage is already present!"};
+    throw std::runtime_error{stagesToInfoString(stage.mStages) +
+                             " shader stage is already present!"};
   }
 
   // concatenate stages
@@ -555,7 +633,7 @@ std::string ShaderReflection::BufferRange::getCppType() const {
 
 std::string ShaderReflection::Buffer::toInfoString() const {
   std::stringstream sstr;
-  sstr << " - " << mType << " " << mName << " (Stages: " << toString(mActiveStages) << ")"
+  sstr << " - " << mType << " " << mName << " (Stages: " << stagesToInfoString(mActiveStages) << ")"
        << std::endl;
   sstr << "   Size:    " << mSize << std::endl;
   sstr << "   Binding: " << mBinding << std::endl;
@@ -563,7 +641,7 @@ std::string ShaderReflection::Buffer::toInfoString() const {
 
   for (auto const& range : mRanges) {
     sstr << "   - " << range.getInfoType() << " " << range.mName << range.getArrayPostfix()
-         << " (Stages: " << toString(range.mActiveStages) << ")" << std::endl;
+         << " (Stages: " << stagesToInfoString(range.mActiveStages) << ")" << std::endl;
     sstr << "     Size:         " << range.mSize << std::endl;
     sstr << "     Offset:       " << range.mOffset << std::endl;
     sstr << "     Alignment:    " << range.mAlignment << std::endl;
@@ -598,6 +676,8 @@ std::string ShaderReflection::Buffer::toCppString() const {
   sstr << "struct " << mType << " {" << std::endl;
   sstr << std::endl;
   sstr << "  // reflection information" << std::endl;
+  sstr << "  static const VkShaderStageFlags ACTIVE_STAGES = " << stagesToCppString(mActiveStages)
+       << ";" << std::endl;
   sstr << "  static const uint32_t BINDING_POINT  = " << mBinding << ";" << std::endl;
   sstr << "  static const uint32_t DESCRIPTOR_SET = " << mSet << ";" << std::endl;
   sstr << std::endl;
@@ -716,7 +796,8 @@ std::string ShaderReflection::Buffer::toCppString() const {
 
 std::string ShaderReflection::Sampler::toInfoString() const {
   std::stringstream sstr;
-  sstr << " - Name: " << mName << " (Stages: " << toString(mActiveStages) << ")" << std::endl;
+  sstr << " - Name: " << mName << " (Stages: " << stagesToInfoString(mActiveStages) << ")"
+       << std::endl;
   sstr << "   Binding: " << mBinding << std::endl;
   return sstr.str();
 }
@@ -727,6 +808,8 @@ std::string ShaderReflection::Sampler::toCppString() const {
   std::stringstream sstr;
   sstr << "// combined image sampler" << std::endl;
   sstr << "struct " << mName << " {" << std::endl;
+  sstr << "  static const VkShaderStageFlags ACTIVE_STAGES = " << stagesToCppString(mActiveStages)
+       << ";" << std::endl;
   sstr << "  static const uint32_t BINDING_POINT = " << mBinding << ";" << std::endl;
   sstr << "  static const uint32_t DESCRIPTOR_SET = " << mSet << ";" << std::endl;
   sstr << "};" << std::endl;

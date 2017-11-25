@@ -32,20 +32,27 @@ class Pipeline {
     uint32_t                        materialCount);
   virtual ~Pipeline();
 
-  void use(FrameInfo const& info, vk::DescriptorSet const& descriptorSet) const;
+  void bind(FrameInfo const& info) const;
+  void useDescriptorSet(FrameInfo const& info, vk::DescriptorSet const& descriptorSet) const;
 
   void setPushConstant(
     FrameInfo const&     info,
     vk::ShaderStageFlags stages,
-    uint32_t             offset,
     uint32_t             size,
-    uint8_t*             data) const;
+    uint8_t*             data,
+    uint32_t             offset = 0) const;
 
   template <typename T>
   void setPushConstant(
-    FrameInfo const& info, vk::ShaderStageFlags stages, uint32_t offset, T data) const {
+    FrameInfo const& info, vk::ShaderStageFlags stages, T data, uint32_t offset = 0) const {
 
-    setPushConstant(info, stages, offset, sizeof(T), reinterpret_cast<uint8_t*>(&data));
+    setPushConstant(info, stages, sizeof(T), reinterpret_cast<uint8_t*>(&data), offset);
+  }
+
+  template <typename T>
+  void setPushConstant(FrameInfo const& info, T data) const {
+    auto stages(reinterpret_cast<const vk::ShaderStageFlags*>(&T::ACTIVE_STAGES));
+    setPushConstant(info, *stages, sizeof(T), reinterpret_cast<uint8_t*>(&data));
   }
 
   vk::DescriptorSet allocateDescriptorSet() const;

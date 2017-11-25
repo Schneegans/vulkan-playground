@@ -14,6 +14,8 @@ set(SHADERS
     "PBR.vert"
     "TexturedQuad.frag"
     "TexturedQuad.vert"
+    "VertexColors.frag"
+    "VertexColors.vert"
 )
 
 CompileShaders(CompileShaders SPIRV_FILES "${SHADERS}")
@@ -21,6 +23,7 @@ CompileShaders(CompileShaders SPIRV_FILES "${SHADERS}")
 # -------------------------------------------------------------------------------- shader reflection
 ExtractReflection(TexturedQuad REFLECTION_HEADERS "TexturedQuad.vert.spv" "TexturedQuad.frag.spv")
 ExtractReflection(PBR REFLECTION_HEADERS "PBR.vert.spv" "PBR.frag.spv")
+ExtractReflection(VertexColors REFLECTION_HEADERS "VertexColors.vert.spv" "VertexColors.frag.spv")
 
 add_custom_target(ExtractReflection ALL DEPENDS ${REFLECTION_HEADERS})
 

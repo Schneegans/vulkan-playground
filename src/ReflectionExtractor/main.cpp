@@ -80,6 +80,7 @@ int main(int argc, char* argv[]) {
     out << "// This file has been automatically created by the ReflectionExtractor." << std::endl;
     out << std::endl;
     out << "#include <glm/glm.hpp>" << std::endl;
+    out << "#include <vulkan/vulkan.hpp>" << std::endl;
     out << std::endl;
     out << "namespace Reflection {" << std::endl;
     out << "namespace " << nameSpace << " {" << std::endl;
