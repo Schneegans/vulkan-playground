@@ -12,6 +12,7 @@
 #define ILLUSION_GRAPHICS_VULKAN_PTR_HPP
 
 // ---------------------------------------------------------------------------------------- includes
+#include <functional>
 #include <memory>
 
 namespace Illusion {
